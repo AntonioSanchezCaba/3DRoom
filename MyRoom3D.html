@@ -367,14 +367,95 @@
         }
 
         room.add(floorGroup);
-        
-        // Back wall
+
+        // ==================== WALLS WITH ACOUSTIC PANEL TEXTURE ====================
+
+        // Back wall base
         const backWall = createBox(12, 8, 0.15, mats.wallBeige, 0, 4, -6);
         room.add(backWall);
-        
-        // Right wall
+
+        // Right wall base
         const rightWall = createBox(0.15, 8, 12, mats.wallBeige, 6, 4, 0);
         room.add(rightWall);
+
+        // Acoustic panel texture on back wall (grid pattern like in photo)
+        const panelMat = new THREE.MeshStandardMaterial({
+            color: 0xd8cfc0,
+            roughness: 0.95,
+            metalness: 0
+        });
+
+        const panelMatDark = new THREE.MeshStandardMaterial({
+            color: 0xc8bfb0,
+            roughness: 0.95,
+            metalness: 0
+        });
+
+        // Create acoustic panel grid on back wall
+        const panelWidth = 0.8;
+        const panelHeight = 0.8;
+        const panelGap = 0.02;
+
+        for (let py = 0; py < 8; py++) {
+            for (let px = 0; px < 12; px++) {
+                // Alternate panel shades slightly for texture
+                const mat = (px + py) % 3 === 0 ? panelMatDark : panelMat;
+
+                const panel = createBox(panelWidth - panelGap, panelHeight - panelGap, 0.02, mat,
+                    -5.2 + px * panelWidth + panelWidth/2,
+                    0.4 + py * panelHeight + panelHeight/2,
+                    -5.9);
+                room.add(panel);
+
+                // Panel edge groove (subtle)
+                if (py > 0) {
+                    const grooveH = createBox(panelWidth - panelGap, 0.008, 0.01,
+                        new THREE.MeshStandardMaterial({ color: 0xb0a090, roughness: 0.8 }),
+                        -5.2 + px * panelWidth + panelWidth/2,
+                        0.4 + py * panelHeight,
+                        -5.88);
+                    room.add(grooveH);
+                }
+                if (px > 0) {
+                    const grooveV = createBox(0.008, panelHeight - panelGap, 0.01,
+                        new THREE.MeshStandardMaterial({ color: 0xb0a090, roughness: 0.8 }),
+                        -5.2 + px * panelWidth,
+                        0.4 + py * panelHeight + panelHeight/2,
+                        -5.88);
+                    room.add(grooveV);
+                }
+            }
+        }
+
+        // Create acoustic panel grid on right wall
+        for (let py = 0; py < 8; py++) {
+            for (let pz = 0; pz < 12; pz++) {
+                const mat = (pz + py) % 3 === 0 ? panelMatDark : panelMat;
+
+                const panel = createBox(0.02, panelHeight - panelGap, panelWidth - panelGap, mat,
+                    5.9,
+                    0.4 + py * panelHeight + panelHeight/2,
+                    -5.2 + pz * panelWidth + panelWidth/2);
+                room.add(panel);
+            }
+        }
+
+        // Wall power outlet (visible in photo)
+        const outletPlate = createBox(0.08, 0.12, 0.015, new THREE.MeshStandardMaterial({
+            color: 0xf0ebe5, roughness: 0.5
+        }), 2.8, 2.8, -5.88);
+        room.add(outletPlate);
+
+        // Outlet holes
+        const outletHole1 = createBox(0.015, 0.025, 0.01, new THREE.MeshBasicMaterial({ color: 0x2a2a2a }), 2.78, 2.82, -5.87);
+        const outletHole2 = createBox(0.015, 0.025, 0.01, new THREE.MeshBasicMaterial({ color: 0x2a2a2a }), 2.82, 2.82, -5.87);
+        room.add(outletHole1, outletHole2);
+
+        // Cable running down from outlet (visible in photo)
+        const cable = createCylinder(0.008, 0.008, 1.5, 8, new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.6
+        }), 2.8, 2.0, -5.87);
+        room.add(cable);
         
         // ==================== DESK ====================
         
@@ -506,63 +587,100 @@
         mainMonitorGroup.position.set(1.5, 1.56, -4.5);
         room.add(mainMonitorGroup);
         
-        // ==================== SECONDARY MONITOR (Security Camera Feed) ====================
-        
+        // ==================== SECONDARY MONITOR (Security Camera Feed - positioned above left of main) ====================
+
         const secMonitorGroup = new THREE.Group();
-        
-        // Monitor arm mount
-        const mountPlate = createBox(0.15, 0.15, 0.05, mats.monitorBlack, 0, 0, -0.4);
+
+        // Wall mount plate
+        const mountPlate = createBox(0.08, 0.08, 0.03, mats.monitorBlack, 0, 0, -0.55);
         secMonitorGroup.add(mountPlate);
-        
-        const mountArm = createBox(0.06, 0.5, 0.06, mats.monitorBlack, 0, -0.25, -0.35);
-        secMonitorGroup.add(mountArm);
-        
-        const mountArmHoriz = createBox(0.06, 0.06, 0.25, mats.monitorBlack, 0, -0.5, -0.2);
-        secMonitorGroup.add(mountArmHoriz);
-        
-        // Monitor frame
-        const secMonitorFrame = createBox(1.0, 0.65, 0.06, mats.monitorBlack, 0, 0, 0);
+
+        // Monitor arm - vertical part from wall
+        const mountArmVert = createBox(0.04, 0.04, 0.35, mats.monitorBlack, 0, 0, -0.35);
+        secMonitorGroup.add(mountArmVert);
+
+        // Monitor arm - tilt mechanism
+        const tiltJoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.03, 10, 10),
+            mats.monitorBlack
+        );
+        tiltJoint.position.set(0, 0, -0.18);
+        secMonitorGroup.add(tiltJoint);
+
+        // Monitor frame (smaller, square-ish)
+        const secMonitorFrame = createBox(0.75, 0.52, 0.04, mats.monitorBlack, 0, 0, 0);
         secMonitorGroup.add(secMonitorFrame);
-        
+
         // Screen with camera feed look
-        const secScreen = createBox(0.92, 0.57, 0.01, mats.screenSecondary, 0, 0, 0.035);
+        const secScreen = createBox(0.68, 0.45, 0.01, mats.screenSecondary, 0, 0, 0.025);
         secMonitorGroup.add(secScreen);
-        
-        // Camera feed elements (bed/room view)
-        const feedRect1 = createBox(0.3, 0.2, 0.005, new THREE.MeshBasicMaterial({ color: 0x445566 }), 0.1, 0.05, 0.04);
-        const feedRect2 = createBox(0.2, 0.15, 0.005, new THREE.MeshBasicMaterial({ color: 0x556677 }), -0.2, -0.1, 0.04);
-        secMonitorGroup.add(feedRect1, feedRect2);
-        
-        secMonitorGroup.position.set(0.7, 3.3, -4.6);
+
+        // Camera feed elements (bed/room view - more detailed)
+        const feedBg = createBox(0.65, 0.42, 0.005, new THREE.MeshBasicMaterial({ color: 0x3a4a5a }), 0, 0, 0.03);
+        secMonitorGroup.add(feedBg);
+
+        // Room elements in camera view
+        const feedBed = createBox(0.25, 0.12, 0.005, new THREE.MeshBasicMaterial({ color: 0x556677 }), 0.1, -0.08, 0.032);
+        const feedWall = createBox(0.6, 0.15, 0.005, new THREE.MeshBasicMaterial({ color: 0x4a5a6a }), 0, 0.12, 0.032);
+        const feedFloor = createBox(0.6, 0.1, 0.005, new THREE.MeshBasicMaterial({ color: 0x3a3a4a }), 0, -0.16, 0.032);
+        secMonitorGroup.add(feedBed, feedWall, feedFloor);
+
+        // Camera timestamp overlay
+        const timestamp = createBox(0.2, 0.03, 0.003, new THREE.MeshBasicMaterial({ color: 0x88aa88 }), 0.2, 0.18, 0.035);
+        secMonitorGroup.add(timestamp);
+
+        // Tilt the monitor slightly down toward user
+        secMonitorGroup.rotation.x = 0.15;
+        secMonitorGroup.position.set(0.6, 3.35, -5.0);
         room.add(secMonitorGroup);
 
-        // ==================== THIRD MONITOR (Dark/Off - vertical on right) ====================
+        // ==================== THIRD MONITOR (Dark/Off - positioned above right of main) ====================
 
         const thirdMonitorGroup = new THREE.Group();
 
-        // Monitor arm mount
-        const mountPlate3 = createBox(0.15, 0.15, 0.05, mats.monitorBlack, 0, 0, -0.35);
+        // Wall mount plate
+        const mountPlate3 = createBox(0.08, 0.08, 0.03, mats.monitorBlack, 0, 0, -0.55);
         thirdMonitorGroup.add(mountPlate3);
 
-        const mountArm3 = createBox(0.06, 0.4, 0.06, mats.monitorBlack, 0, -0.2, -0.3);
+        // Monitor arm from wall
+        const mountArm3 = createBox(0.04, 0.04, 0.35, mats.monitorBlack, 0, 0, -0.35);
         thirdMonitorGroup.add(mountArm3);
 
-        const mountArmHoriz3 = createBox(0.06, 0.06, 0.2, mats.monitorBlack, 0, -0.4, -0.18);
-        thirdMonitorGroup.add(mountArmHoriz3);
+        // Tilt joint
+        const tiltJoint3 = new THREE.Mesh(
+            new THREE.SphereGeometry(0.03, 10, 10),
+            mats.monitorBlack
+        );
+        tiltJoint3.position.set(0, 0, -0.18);
+        thirdMonitorGroup.add(tiltJoint3);
 
-        // Monitor frame (vertical orientation)
-        const thirdMonitorFrame = createBox(0.65, 1.0, 0.06, mats.monitorBlack, 0, 0.1, 0);
+        // Monitor frame (vertical/portrait orientation)
+        const thirdMonitorFrame = createBox(0.52, 0.75, 0.04, mats.monitorBlack, 0, 0, 0);
         thirdMonitorGroup.add(thirdMonitorFrame);
 
-        // Dark screen
-        const thirdScreen = createBox(0.58, 0.92, 0.01, new THREE.MeshBasicMaterial({ color: 0x0a0a12 }), 0, 0.1, 0.035);
+        // Dark screen (off but with subtle reflection)
+        const thirdScreen = createBox(0.46, 0.68, 0.01, new THREE.MeshStandardMaterial({
+            color: 0x08080c,
+            roughness: 0.2,
+            metalness: 0.1
+        }), 0, 0, 0.025);
         thirdMonitorGroup.add(thirdScreen);
 
-        // Subtle power LED
-        const powerLed = createBox(0.01, 0.01, 0.005, new THREE.MeshBasicMaterial({ color: 0xff3300 }), 0.25, -0.35, 0.035);
+        // Subtle ambient reflection on screen
+        const screenReflection = createBox(0.2, 0.4, 0.005, new THREE.MeshBasicMaterial({
+            color: 0x151520,
+            transparent: true,
+            opacity: 0.3
+        }), 0.08, 0.05, 0.028);
+        thirdMonitorGroup.add(screenReflection);
+
+        // Power LED (standby orange)
+        const powerLed = createBox(0.008, 0.008, 0.003, new THREE.MeshBasicMaterial({ color: 0xff6600 }), 0.2, -0.32, 0.025);
         thirdMonitorGroup.add(powerLed);
 
-        thirdMonitorGroup.position.set(2.1, 3.2, -4.6);
+        // Tilt the monitor slightly down
+        thirdMonitorGroup.rotation.x = 0.15;
+        thirdMonitorGroup.position.set(2.3, 3.35, -5.0);
         room.add(thirdMonitorGroup);
         
         // ==================== PC CASE (Gaming with RGB) ====================
@@ -716,35 +834,99 @@
         room.add(pcGroup);
         
         // ==================== KEYBOARD (Mechanical with RGB) ====================
-        
+
         const keyboardGroup = new THREE.Group();
-        
-        // Base
-        const kbBase = createBox(0.95, 0.045, 0.38, mats.keyboardBlack, 0, 0.0225, 0);
+
+        // Base plate (aluminum looking)
+        const kbBaseBottom = createBox(0.92, 0.015, 0.36, new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.4, metalness: 0.3
+        }), 0, 0.0075, 0);
+        keyboardGroup.add(kbBaseBottom);
+
+        // Base with RGB diffuser layer
+        const kbBase = createBox(0.9, 0.025, 0.34, new THREE.MeshStandardMaterial({
+            color: 0x252525, roughness: 0.5
+        }), 0, 0.0275, 0);
         keyboardGroup.add(kbBase);
-        
-        // Raised back
-        const kbBack = createBox(0.95, 0.06, 0.1, mats.keyboardBlack, 0, 0.03, -0.14);
-        keyboardGroup.add(kbBack);
-        
-        // Key rows
+
+        // RGB backlight layer (visible between keys)
+        const kbRgbLayer = createBox(0.88, 0.003, 0.32, new THREE.MeshBasicMaterial({
+            color: 0xff0066
+        }), 0, 0.041, 0);
+        keyboardGroup.add(kbRgbLayer);
+
+        // Key switch plate
+        const kbPlate = createBox(0.88, 0.008, 0.32, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.6
+        }), 0, 0.048, 0);
+        keyboardGroup.add(kbPlate);
+
+        // Create keycaps with RGB glow beneath each
+        const keyColors = [0x2a2a2a, 0x2d2d2d, 0x282828, 0x2f2f2f]; // Slight variation
+        const rgbColors = [0xff0066, 0xff00aa, 0xaa00ff, 0x6600ff, 0x00aaff, 0x00ffaa];
+
         for (let row = 0; row < 5; row++) {
             for (let col = 0; col < 15; col++) {
-                const keySize = col === 14 ? 0.08 : 0.05;
-                const key = createBox(
-                    keySize, 0.02, 0.05,
-                    new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.6 }),
-                    -0.4 + col * 0.058, 0.055, 0.12 - row * 0.07
-                );
-                keyboardGroup.add(key);
+                // Variable key sizes for realistic layout
+                let keyWidth = 0.048;
+                if (col === 0 && row === 4) keyWidth = 0.07; // Ctrl
+                if (col === 14 && row === 0) keyWidth = 0.065; // Backspace
+                if (col === 14 && row === 2) keyWidth = 0.08; // Enter
+                if (col === 14 && row === 4) keyWidth = 0.07; // Ctrl
+
+                const xPos = -0.38 + col * 0.055;
+                const zPos = 0.11 - row * 0.065;
+
+                // RGB glow under each key
+                const keyGlow = createBox(keyWidth - 0.008, 0.002, 0.04,
+                    new THREE.MeshBasicMaterial({
+                        color: rgbColors[(row + col) % rgbColors.length],
+                        transparent: true,
+                        opacity: 0.8
+                    }), xPos, 0.044, zPos);
+                keyboardGroup.add(keyGlow);
+
+                // Keycap (slightly rounded appearance using box)
+                const keycap = createBox(keyWidth, 0.018, 0.045,
+                    new THREE.MeshStandardMaterial({
+                        color: keyColors[Math.floor(Math.random() * keyColors.length)],
+                        roughness: 0.5,
+                        metalness: 0.05
+                    }), xPos, 0.062, zPos);
+                keyboardGroup.add(keycap);
+
+                // Keycap top surface (lighter)
+                const keycapTop = createBox(keyWidth - 0.006, 0.003, 0.038,
+                    new THREE.MeshStandardMaterial({
+                        color: 0x3a3a3a,
+                        roughness: 0.7
+                    }), xPos, 0.072, zPos);
+                keyboardGroup.add(keycapTop);
             }
         }
-        
-        // RGB underglow
-        const kbGlow = createBox(0.9, 0.005, 0.35, new THREE.MeshBasicMaterial({ color: 0xff0066 }), 0, 0.002, 0);
-        keyboardGroup.add(kbGlow);
-        
-        keyboardGroup.position.set(1.5, 1.56, -3.5);
+
+        // Spacebar (row 4, center)
+        const spacebarGlow = createBox(0.28, 0.002, 0.04, new THREE.MeshBasicMaterial({
+            color: 0xff0088
+        }), 0.05, 0.044, 0.11 - 4 * 0.065);
+        keyboardGroup.add(spacebarGlow);
+
+        const spacebar = createBox(0.3, 0.015, 0.045, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.5
+        }), 0.05, 0.06, 0.11 - 4 * 0.065);
+        keyboardGroup.add(spacebar);
+
+        // RGB side strips
+        const sideStripL = createBox(0.008, 0.015, 0.32, new THREE.MeshBasicMaterial({ color: 0xff0066 }), -0.45, 0.035, 0);
+        const sideStripR = createBox(0.008, 0.015, 0.32, new THREE.MeshBasicMaterial({ color: 0xff0066 }), 0.45, 0.035, 0);
+        keyboardGroup.add(sideStripL, sideStripR);
+
+        // USB cable exit
+        const cableExit = createCylinder(0.015, 0.015, 0.03, 10, mats.keyboardBlack, 0, 0.02, -0.18);
+        cableExit.rotation.x = Math.PI / 2;
+        keyboardGroup.add(cableExit);
+
+        keyboardGroup.position.set(1.3, 1.56, -3.6);
         room.add(keyboardGroup);
         
         // ==================== MOUSE & MOUSEPAD ====================
@@ -1247,7 +1429,21 @@
         centerCap.rotation.x = Math.PI / 2;
         fanGroup.add(centerCap);
         
-        fanGroup.position.set(-4.2, 0, -1.5);
+        // Oscillation controls on back
+        const oscButton = createCylinder(0.02, 0.02, 0.03, 10, new THREE.MeshStandardMaterial({
+            color: 0x3a3a3a, roughness: 0.5
+        }), 0.08, 1.3, -0.02);
+        oscButton.rotation.x = Math.PI / 2;
+        fanGroup.add(oscButton);
+
+        // Brand logo area on motor
+        const logoArea = createBox(0.08, 0.03, 0.01, new THREE.MeshStandardMaterial({
+            color: 0x252525, roughness: 0.6
+        }), 0, 1.38, 0.04);
+        fanGroup.add(logoArea);
+
+        fanGroup.position.set(-4.0, 0, -2.0);
+        fanGroup.rotation.y = 0.3; // Angled slightly toward room
         room.add(fanGroup);
         
         // ==================== CHAIR (Simple office chair like in photo) ====================
@@ -1374,55 +1570,103 @@
         chairGroup.rotation.y = Math.PI + 0.15;
         room.add(chairGroup);
         
-        // ==================== DUMBBELLS ====================
-        
+        // ==================== DUMBBELLS (Rack with adjustable weights like in photo) ====================
+
         const dumbbellsGroup = new THREE.Group();
-        
-        // Create rack of dumbbells (4 pairs, stacked)
-        for (let row = 0; row < 2; row++) {
+
+        // Dumbbell rack base (simple A-frame style)
+        const rackBaseMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.6, metalness: 0.3
+        });
+
+        // Rack uprights
+        const rackLeft = createBox(0.04, 0.25, 0.04, rackBaseMat, -0.25, 0.125, 0);
+        const rackRight = createBox(0.04, 0.25, 0.04, rackBaseMat, 0.25, 0.125, 0);
+        dumbbellsGroup.add(rackLeft, rackRight);
+
+        // Rack crossbars
+        const rackBar1 = createBox(0.54, 0.03, 0.04, rackBaseMat, 0, 0.08, 0);
+        const rackBar2 = createBox(0.54, 0.03, 0.04, rackBaseMat, 0, 0.2, 0);
+        dumbbellsGroup.add(rackBar1, rackBar2);
+
+        // Create adjustable dumbbells (2 rows)
+        const weightSizes = [
+            { outer: 0.07, inner: 0.055, redOuter: 0.065, y: 0.085 },
+            { outer: 0.065, inner: 0.05, redOuter: 0.06, y: 0.21 },
+        ];
+
+        weightSizes.forEach((size, row) => {
             for (let col = 0; col < 2; col++) {
                 const db = new THREE.Group();
-                
-                // Bar
-                const bar = createCylinder(0.018, 0.018, 0.36, 10, mats.weightBlack, 0, 0, 0);
-                bar.rotation.z = Math.PI / 2;
-                db.add(bar);
-                
-                // Left weight plates
-                const plateL1 = createCylinder(0.065, 0.065, 0.04, 14, mats.weightRed, -0.14, 0, 0);
+
+                // Grip (rubberized handle)
+                const grip = createCylinder(0.02, 0.02, 0.12, 12, new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a, roughness: 0.7
+                }), 0, 0, 0);
+                grip.rotation.z = Math.PI / 2;
+                db.add(grip);
+
+                // Handle knurling texture (simple rings)
+                for (let k = 0; k < 5; k++) {
+                    const knurl = new THREE.Mesh(
+                        new THREE.TorusGeometry(0.022, 0.002, 6, 12),
+                        new THREE.MeshStandardMaterial({ color: 0x3a3a3a })
+                    );
+                    knurl.position.set(-0.04 + k * 0.02, 0, 0);
+                    knurl.rotation.y = Math.PI / 2;
+                    db.add(knurl);
+                }
+
+                // Left weight assembly
+                // Inner black plate
+                const plateL1 = createCylinder(size.inner, size.inner, 0.025, 14, mats.weightBlack, -0.08, 0, 0);
                 plateL1.rotation.z = Math.PI / 2;
                 db.add(plateL1);
-                
-                const plateL2 = createCylinder(0.055, 0.055, 0.03, 14, mats.weightBlack, -0.16, 0, 0);
+
+                // Red outer plate
+                const plateL2 = createCylinder(size.redOuter, size.redOuter, 0.035, 14, mats.weightRed, -0.115, 0, 0);
                 plateL2.rotation.z = Math.PI / 2;
                 db.add(plateL2);
-                
-                // Right weight plates
-                const plateR1 = createCylinder(0.065, 0.065, 0.04, 14, mats.weightRed, 0.14, 0, 0);
+
+                // Outer black plate
+                const plateL3 = createCylinder(size.outer, size.outer, 0.03, 14, mats.weightBlack, -0.15, 0, 0);
+                plateL3.rotation.z = Math.PI / 2;
+                db.add(plateL3);
+
+                // End cap
+                const capL = createCylinder(0.025, 0.025, 0.02, 10, new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a, roughness: 0.4
+                }), -0.17, 0, 0);
+                capL.rotation.z = Math.PI / 2;
+                db.add(capL);
+
+                // Right weight assembly (mirror)
+                const plateR1 = createCylinder(size.inner, size.inner, 0.025, 14, mats.weightBlack, 0.08, 0, 0);
                 plateR1.rotation.z = Math.PI / 2;
                 db.add(plateR1);
-                
-                const plateR2 = createCylinder(0.055, 0.055, 0.03, 14, mats.weightBlack, 0.16, 0, 0);
+
+                const plateR2 = createCylinder(size.redOuter, size.redOuter, 0.035, 14, mats.weightRed, 0.115, 0, 0);
                 plateR2.rotation.z = Math.PI / 2;
                 db.add(plateR2);
-                
-                db.position.set(col * 0.4 - 0.2, 0.08 + row * 0.16, row * 0.12);
+
+                const plateR3 = createCylinder(size.outer, size.outer, 0.03, 14, mats.weightBlack, 0.15, 0, 0);
+                plateR3.rotation.z = Math.PI / 2;
+                db.add(plateR3);
+
+                const capR = createCylinder(0.025, 0.025, 0.02, 10, new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a, roughness: 0.4
+                }), 0.17, 0, 0);
+                capR.rotation.z = Math.PI / 2;
+                db.add(capR);
+
+                db.position.set(col * 0.38 - 0.19, size.y, 0);
                 dumbbellsGroup.add(db);
             }
-        }
-        
-        dumbbellsGroup.position.set(2.8, 0, -3.2);
+        });
+
+        dumbbellsGroup.position.set(3.0, 0, -3.0);
+        dumbbellsGroup.rotation.y = -0.2;
         room.add(dumbbellsGroup);
-        
-        // ==================== OUTLET ON WALL ====================
-        
-        const outlet = createBox(0.1, 0.15, 0.02, new THREE.MeshStandardMaterial({ color: 0xf5f5f0 }), 3.5, 2.5, -5.9);
-        room.add(outlet);
-        
-        // ==================== CABLE ON WALL ====================
-        
-        const cable = createBox(0.015, 1.2, 0.015, new THREE.MeshStandardMaterial({ color: 0x1a1a1a }), 2.8, 3.0, -5.9);
-        room.add(cable);
         
         // ==================== ADD ROOM TO SCENE ====================
         
