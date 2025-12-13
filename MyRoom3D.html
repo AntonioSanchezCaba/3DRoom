@@ -1772,8 +1772,8 @@
             pcRgbLight1.color.setHSL((time * 0.25) % 1, 1, 0.5);
             pcRgbLight2.color.setHSL((time * 0.25 + 0.5) % 1, 1, 0.5);
             
-            // Keyboard underglow
-            kbGlow.material.color.setHSL((time * 0.15) % 1, 1, 0.5);
+            // Keyboard RGB layer animation
+            kbRgbLayer.material.color.setHSL((time * 0.15) % 1, 1, 0.5);
             
             // Subtle screen flicker
             screenGlow.intensity = 0.45 + Math.sin(time * 2) * 0.08;
