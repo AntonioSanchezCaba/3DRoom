@@ -1536,11 +1536,12 @@
             guitarGroup.add(string);
         });
 
-        // Position guitar on stand - leaning back slightly
-        guitarGroup.position.set(-3.8, 0, -3.2);
+        // Position guitar on stand - scaled up and leaning back slightly
+        guitarGroup.scale.set(1.4, 1.4, 1.4); // Scale up guitar to be more visible
+        guitarGroup.position.set(-3.5, 0, -3.8);
         guitarGroup.rotation.z = 0.08;
-        guitarGroup.rotation.y = 0.35;
-        guitarGroup.rotation.x = -0.05; // Slight lean back on stand
+        guitarGroup.rotation.y = 0.5;
+        guitarGroup.rotation.x = -0.08; // Slight lean back on stand
         room.add(guitarGroup);
         
         // ==================== FAN (Realistic Pedestal Fan) ====================
@@ -1747,8 +1748,10 @@
             fanGroup.add(grip);
         }
 
-        fanGroup.position.set(-4.2, 0, -1.8);
-        fanGroup.rotation.y = 0.4; // Angled toward room
+        // Scale up fan and position it
+        fanGroup.scale.set(1.6, 1.6, 1.6); // Scale up to be more realistic size
+        fanGroup.position.set(-4.5, 0, -1.5);
+        fanGroup.rotation.y = 0.5; // Angled toward room
         room.add(fanGroup);
         
         // ==================== CHAIR (Simple office chair like in photo) ====================
