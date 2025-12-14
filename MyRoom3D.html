@@ -1204,132 +1204,163 @@
         shelfGroup.position.set(-2, 0, -5.2);
         room.add(shelfGroup);
         
-        // ==================== GUITAR (Simple Acoustic Guitar) ====================
+        // ==================== GUITAR (Acoustic Guitar - Oval Body) ====================
 
         const guitarGroup = new THREE.Group();
 
-        // Wood materials
-        const gtBodyTop = new THREE.MeshStandardMaterial({ color: 0xd4a056, roughness: 0.35, metalness: 0.02 }); // Spruce top
-        const gtBodySide = new THREE.MeshStandardMaterial({ color: 0x6b4423, roughness: 0.4, metalness: 0.02 }); // Mahogany
-        const gtNeck = new THREE.MeshStandardMaterial({ color: 0x5c3d1e, roughness: 0.4, metalness: 0 });
-        const gtFretboard = new THREE.MeshStandardMaterial({ color: 0x1a0d05, roughness: 0.5, metalness: 0 });
-        const gtBlack = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6, metalness: 0 });
+        // Wood materials - natural amber/honey color like in reference
+        const gtBodyTop = new THREE.MeshStandardMaterial({ color: 0xd4a050, roughness: 0.35, metalness: 0.02 });
+        const gtBodySide = new THREE.MeshStandardMaterial({ color: 0x8b5a30, roughness: 0.4, metalness: 0.02 });
+        const gtNeck = new THREE.MeshStandardMaterial({ color: 0xc49040, roughness: 0.35, metalness: 0 });
+        const gtFretboard = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.5, metalness: 0 });
+        const gtBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0 });
 
-        // ===== GUITAR BODY (using BoxGeometry for solid shape) =====
-        // Main body - flat box representing the guitar body
-        const bodyWidth = 0.38;
-        const bodyHeight = 0.50;
+        // ===== GUITAR BODY (Oval shape using cylinder) =====
         const bodyDepth = 0.10;
 
-        // Body front (spruce top)
-        const gtBodyFront = createBox(bodyWidth, bodyHeight, 0.01, gtBodyTop, 0, 0.35, bodyDepth/2);
-        guitarGroup.add(gtBodyFront);
+        // Main body - cylinder rotated to be flat (creates oval disc shape)
+        const gtBody = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.20, 0.20, bodyDepth, 32),
+            gtBodyTop
+        );
+        gtBody.rotation.x = Math.PI / 2;
+        gtBody.position.set(0, 0.30, 0);
+        gtBody.scale.set(1, 1, 1.35); // Stretch to make oval (taller than wide)
+        guitarGroup.add(gtBody);
 
-        // Body back
-        const gtBodyBack = createBox(bodyWidth, bodyHeight, 0.01, gtBodySide, 0, 0.35, -bodyDepth/2);
-        guitarGroup.add(gtBodyBack);
+        // Body edge/rim (darker wood)
+        const gtBodyRim = new THREE.Mesh(
+            new THREE.TorusGeometry(0.20, 0.012, 8, 32),
+            gtBodySide
+        );
+        gtBodyRim.position.set(0, 0.30, bodyDepth/2);
+        gtBodyRim.scale.set(1, 1.35, 1);
+        guitarGroup.add(gtBodyRim);
 
-        // Body sides (creating the depth)
-        const gtBodyLeft = createBox(0.01, bodyHeight, bodyDepth, gtBodySide, -bodyWidth/2, 0.35, 0);
-        guitarGroup.add(gtBodyLeft);
+        // Body back rim
+        const gtBodyRimBack = new THREE.Mesh(
+            new THREE.TorusGeometry(0.20, 0.012, 8, 32),
+            gtBodySide
+        );
+        gtBodyRimBack.position.set(0, 0.30, -bodyDepth/2);
+        gtBodyRimBack.scale.set(1, 1.35, 1);
+        guitarGroup.add(gtBodyRimBack);
 
-        const gtBodyRight = createBox(0.01, bodyHeight, bodyDepth, gtBodySide, bodyWidth/2, 0.35, 0);
-        guitarGroup.add(gtBodyRight);
-
-        // Body top edge
-        const gtBodyTopEdge = createBox(bodyWidth, 0.01, bodyDepth, gtBodySide, 0, 0.60, 0);
-        guitarGroup.add(gtBodyTopEdge);
-
-        // Body bottom edge
-        const gtBodyBottomEdge = createBox(bodyWidth, 0.01, bodyDepth, gtBodySide, 0, 0.10, 0);
-        guitarGroup.add(gtBodyBottomEdge);
-
-        // Sound hole (black circle)
+        // Sound hole (black circle) - positioned in upper area of body
         const gtSoundHole = new THREE.Mesh(
-            new THREE.CircleGeometry(0.06, 32),
+            new THREE.CircleGeometry(0.045, 32),
             gtBlack
         );
-        gtSoundHole.position.set(0, 0.42, bodyDepth/2 + 0.011);
+        gtSoundHole.position.set(0, 0.36, bodyDepth/2 + 0.001);
         guitarGroup.add(gtSoundHole);
 
         // Rosette (decorative ring around sound hole)
         const gtRosette = new THREE.Mesh(
-            new THREE.RingGeometry(0.06, 0.075, 32),
-            new THREE.MeshStandardMaterial({ color: 0x8b6914, roughness: 0.4 })
+            new THREE.RingGeometry(0.045, 0.055, 32),
+            new THREE.MeshStandardMaterial({ color: 0x5a3d20, roughness: 0.4 })
         );
-        gtRosette.position.set(0, 0.42, bodyDepth/2 + 0.012);
+        gtRosette.position.set(0, 0.36, bodyDepth/2 + 0.002);
         guitarGroup.add(gtRosette);
 
-        // Bridge (black rectangle on body)
-        const gtBridge = createBox(0.14, 0.025, 0.02, gtFretboard, 0, 0.22, bodyDepth/2 + 0.005);
+        // Pickguard (black teardrop shape below sound hole) - like in reference
+        const pickguardShape = new THREE.Shape();
+        pickguardShape.moveTo(0, 0);
+        pickguardShape.bezierCurveTo(0.06, 0.02, 0.08, 0.08, 0.05, 0.12);
+        pickguardShape.bezierCurveTo(0.02, 0.14, -0.02, 0.10, -0.01, 0.04);
+        pickguardShape.bezierCurveTo(-0.01, 0.02, 0, 0, 0, 0);
+        const gtPickguard = new THREE.Mesh(
+            new THREE.ShapeGeometry(pickguardShape),
+            gtBlack
+        );
+        gtPickguard.position.set(-0.02, 0.22, bodyDepth/2 + 0.002);
+        guitarGroup.add(gtPickguard);
+
+        // Bridge (on lower part of body)
+        const gtBridge = createBox(0.10, 0.018, 0.015, gtFretboard, 0, 0.14, bodyDepth/2 + 0.005);
         guitarGroup.add(gtBridge);
 
         // Saddle (white line on bridge)
-        const gtSaddle = createBox(0.12, 0.004, 0.006, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, 0.225, bodyDepth/2 + 0.016);
+        const gtSaddle = createBox(0.08, 0.004, 0.008, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, 0.145, bodyDepth/2 + 0.013);
         guitarGroup.add(gtSaddle);
 
         // ===== NECK =====
-        const neckLength = 0.65;
-        const gtNeckBody = createBox(0.045, neckLength, 0.02, gtNeck, 0, 0.60 + neckLength/2, 0);
+        const neckStartY = 0.50;
+        const neckLength = 0.55;
+
+        // Neck body
+        const gtNeckBody = createBox(0.038, neckLength, 0.018, gtNeck, 0, neckStartY + neckLength/2, 0);
         guitarGroup.add(gtNeckBody);
 
-        // Fretboard (on top of neck)
-        const gtFretboardMesh = createBox(0.042, neckLength - 0.05, 0.008, gtFretboard, 0, 0.62 + neckLength/2, 0.014);
+        // Fretboard (darker, on front of neck)
+        const gtFretboardMesh = createBox(0.036, neckLength - 0.02, 0.006, gtFretboard, 0, neckStartY + neckLength/2, 0.012);
         guitarGroup.add(gtFretboardMesh);
 
         // Frets (metal lines)
-        const gtFretMat = new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.2, metalness: 0.8 });
-        for (let i = 0; i < 12; i++) {
-            const fretY = 0.68 + i * 0.048;
-            const gtFret = createBox(0.044, 0.003, 0.01, gtFretMat, 0, fretY, 0.018);
-            guitarGroup.add(gtFret);
+        const gtFretMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c0, roughness: 0.2, metalness: 0.8 });
+        for (let i = 0; i < 18; i++) {
+            const fretY = neckStartY + 0.03 + i * 0.028;
+            if (fretY < neckStartY + neckLength - 0.02) {
+                const gtFret = createBox(0.038, 0.002, 0.008, gtFretMat, 0, fretY, 0.015);
+                guitarGroup.add(gtFret);
+            }
         }
 
-        // Fret markers (dots)
-        [0.75, 0.85, 0.95, 1.05, 1.20].forEach(y => {
-            const marker = new THREE.Mesh(
-                new THREE.CircleGeometry(0.004, 8),
-                new THREE.MeshStandardMaterial({ color: 0xf5f0e0 })
-            );
-            marker.position.set(0, y, 0.019);
-            guitarGroup.add(marker);
+        // Fret markers (dots at frets 3, 5, 7, 9, 12)
+        [3, 5, 7, 9, 12].forEach(fretNum => {
+            const markerY = neckStartY + 0.03 + (fretNum - 0.5) * 0.028;
+            if (markerY < neckStartY + neckLength - 0.02) {
+                const marker = new THREE.Mesh(
+                    new THREE.CircleGeometry(0.004, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xf0e8d8 })
+                );
+                marker.position.set(0, markerY, 0.016);
+                guitarGroup.add(marker);
+            }
         });
 
         // ===== HEADSTOCK =====
-        const gtHeadstock = createBox(0.05, 0.15, 0.018, gtNeck, 0, 1.30, 0);
+        const headstockY = neckStartY + neckLength;
+        const gtHeadstock = createBox(0.042, 0.12, 0.016, gtNeck, 0, headstockY + 0.06, -0.005);
+        gtHeadstock.rotation.x = -0.15; // Slight angle back
         guitarGroup.add(gtHeadstock);
 
-        // Nut (white bar between neck and headstock)
-        const gtNut = createBox(0.046, 0.008, 0.01, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, 1.225, 0.012);
+        // Nut (white bar at top of fretboard)
+        const gtNut = createBox(0.038, 0.006, 0.008, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, headstockY, 0.012);
         guitarGroup.add(gtNut);
 
         // Tuning pegs (6 total, 3 per side)
-        const gtTunerMat = new THREE.MeshStandardMaterial({ color: 0xd0d0d0, roughness: 0.3, metalness: 0.7 });
+        const gtTunerMat = new THREE.MeshStandardMaterial({ color: 0xd0d0c8, roughness: 0.3, metalness: 0.7 });
+        const gtTunerButton = new THREE.MeshStandardMaterial({ color: 0xf0e8d8, roughness: 0.4 });
         for (let i = 0; i < 3; i++) {
-            // Left tuners
-            const tunerL = createCylinder(0.012, 0.008, 0.025, 8, gtTunerMat, -0.04, 1.26 + i * 0.04, 0);
-            tunerL.rotation.z = Math.PI / 2;
-            guitarGroup.add(tunerL);
+            // Left tuners (posts + buttons)
+            const tunerPostL = createCylinder(0.005, 0.005, 0.02, 8, gtTunerMat, -0.032, headstockY + 0.03 + i * 0.032, -0.005);
+            tunerPostL.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerPostL);
+            const tunerButtonL = createCylinder(0.010, 0.008, 0.018, 8, gtTunerButton, -0.048, headstockY + 0.03 + i * 0.032, -0.005);
+            tunerButtonL.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerButtonL);
 
             // Right tuners
-            const tunerR = createCylinder(0.012, 0.008, 0.025, 8, gtTunerMat, 0.04, 1.26 + i * 0.04, 0);
-            tunerR.rotation.z = Math.PI / 2;
-            guitarGroup.add(tunerR);
+            const tunerPostR = createCylinder(0.005, 0.005, 0.02, 8, gtTunerMat, 0.032, headstockY + 0.03 + i * 0.032, -0.005);
+            tunerPostR.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerPostR);
+            const tunerButtonR = createCylinder(0.010, 0.008, 0.018, 8, gtTunerButton, 0.048, headstockY + 0.03 + i * 0.032, -0.005);
+            tunerButtonR.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerButtonR);
         }
 
         // ===== STRINGS =====
-        const gtStringMat = new THREE.MeshStandardMaterial({ color: 0xb8956a, roughness: 0.3, metalness: 0.6 });
+        const gtStringMat = new THREE.MeshStandardMaterial({ color: 0xc8a060, roughness: 0.25, metalness: 0.6 });
         for (let i = 0; i < 6; i++) {
-            const stringX = -0.015 + i * 0.006;
-            const stringThick = 0.002 - i * 0.0002;
-            const gtString = createBox(stringThick, 1.0, 0.001, gtStringMat, stringX, 0.72, bodyDepth/2 + 0.02);
+            const stringX = -0.012 + i * 0.0048;
+            const gtString = createCylinder(0.001, 0.001, 0.92, 4, gtStringMat, stringX, 0.60, bodyDepth/2 + 0.015);
             guitarGroup.add(gtString);
         }
 
-        // Position guitar - leaning against wall
-        guitarGroup.position.set(-4.0, 0, -4.5);
-        guitarGroup.rotation.z = 0.15; // Slight lean
-        guitarGroup.rotation.y = 0.3;
+        // Position guitar - standing/leaning
+        guitarGroup.position.set(-4.2, 0, -4.2);
+        guitarGroup.rotation.z = 0.12; // Slight lean
+        guitarGroup.rotation.y = 0.4;
         room.add(guitarGroup);
         
         // ==================== FAN (Realistic Pedestal Fan) ====================
