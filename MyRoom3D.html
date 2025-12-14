@@ -1582,13 +1582,13 @@
         fanGroup.add(fanPoleUpper);
 
         // Tilt adjustment joint
-        const tiltJoint = new THREE.Mesh(
+        const fanTiltJoint = new THREE.Mesh(
             new THREE.SphereGeometry(0.045, 16, 12),
             fanPlasticGray
         );
-        tiltJoint.position.set(0, 1.12, 0.02);
-        tiltJoint.scale.set(1, 0.8, 1);
-        fanGroup.add(tiltJoint);
+        fanTiltJoint.position.set(0, 1.12, 0.02);
+        fanTiltJoint.scale.set(1, 0.8, 1);
+        fanGroup.add(fanTiltJoint);
 
         // Motor housing - cylindrical with rounded edges
         const motorMain = createCylinder(0.10, 0.10, 0.14, 20, fanPlasticBlack, 0, 1.18, 0.12);
