@@ -1,0 +1,1951 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Room in 3D</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;600&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Outfit', sans-serif;
+            overflow: hidden;
+            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+        }
+        
+        #canvas-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+        
+        canvas {
+            display: block;
+        }
+        
+        .ui-overlay {
+            position: fixed;
+            z-index: 100;
+            pointer-events: none;
+        }
+        
+        .title {
+            top: 30px;
+            left: 40px;
+            color: #fff;
+        }
+        
+        .title h1 {
+            font-family: 'Space Mono', monospace;
+            font-size: 2.5rem;
+            font-weight: 700;
+            letter-spacing: -2px;
+            background: linear-gradient(90deg, #00d9ff, #ff00e5, #00d9ff);
+            background-size: 200% auto;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: gradient-shift 3s ease infinite;
+            text-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
+        }
+        
+        .title p {
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.5);
+            margin-top: 5px;
+            font-weight: 300;
+        }
+        
+        @keyframes gradient-shift {
+            0% { background-position: 0% center; }
+            50% { background-position: 100% center; }
+            100% { background-position: 0% center; }
+        }
+        
+        .controls-hint {
+            bottom: 30px;
+            left: 40px;
+            color: rgba(255,255,255,0.6);
+            font-size: 0.85rem;
+        }
+        
+        .controls-hint span {
+            display: block;
+            margin-bottom: 5px;
+            font-family: 'Space Mono', monospace;
+        }
+        
+        .controls-hint span::before {
+            content: '→';
+            margin-right: 10px;
+            color: #00d9ff;
+        }
+        
+        .loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #0a0a0f;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+            transition: opacity 0.8s ease, visibility 0.8s ease;
+        }
+        
+        .loading.hidden {
+            opacity: 0;
+            visibility: hidden;
+        }
+        
+        .loading-text {
+            font-family: 'Space Mono', monospace;
+            font-size: 1.2rem;
+            color: #00d9ff;
+            animation: pulse 1.5s ease-in-out infinite;
+        }
+        
+        .loading-bar {
+            width: 200px;
+            height: 3px;
+            background: rgba(255,255,255,0.1);
+            margin-top: 20px;
+            border-radius: 2px;
+            overflow: hidden;
+        }
+        
+        .loading-bar::after {
+            content: '';
+            display: block;
+            width: 40%;
+            height: 100%;
+            background: linear-gradient(90deg, #00d9ff, #ff00e5);
+            animation: loading-slide 1s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes loading-slide {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(350%); }
+        }
+        
+        .theme-toggle {
+            position: fixed;
+            bottom: 30px;
+            right: 40px;
+            z-index: 100;
+            pointer-events: auto;
+            background: rgba(255,255,255,0.1);
+            border: 1px solid rgba(255,255,255,0.2);
+            color: #fff;
+            padding: 10px 20px;
+            border-radius: 30px;
+            cursor: pointer;
+            font-family: 'Space Mono', monospace;
+            font-size: 0.8rem;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(10px);
+        }
+        
+        .theme-toggle:hover {
+            background: rgba(0, 217, 255, 0.2);
+            border-color: #00d9ff;
+            transform: scale(1.05);
+        }
+    </style>
+</head>
+<body>
+    <div class="loading" id="loading">
+        <div class="loading-text">Cargando habitación...</div>
+        <div class="loading-bar"></div>
+    </div>
+    
+    <div class="ui-overlay title">
+        <h1>My Room in 3D</h1>
+        <p>AMC's Workspace</p>
+    </div>
+    
+    <div class="ui-overlay controls-hint">
+        <span>Arrastra para rotar</span>
+        <span>Scroll para zoom</span>
+        <span>Click derecho para mover</span>
+    </div>
+    
+    <button class="theme-toggle" id="themeToggle">☀️ Modo Día</button>
+    
+    <div id="canvas-container"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    
+    <script>
+        // Scene setup
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+        
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = true;
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        
+        document.getElementById('canvas-container').appendChild(renderer.domElement);
+        
+        // Controls
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.minDistance = 4;
+        controls.maxDistance = 20;
+        controls.maxPolarAngle = Math.PI / 1.8;
+        
+        camera.position.set(10, 8, 10);
+        controls.target.set(0, 2, 0);
+        
+        // Helper functions
+        function createBox(w, h, d, material, x, y, z) {
+            const geometry = new THREE.BoxGeometry(w, h, d);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+        
+        function createCylinder(rTop, rBot, h, segments, material, x, y, z) {
+            const geometry = new THREE.CylinderGeometry(rTop, rBot, h, segments);
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.position.set(x, y, z);
+            mesh.castShadow = true;
+            mesh.receiveShadow = true;
+            return mesh;
+        }
+        
+        // Materials with better colors matching the photo
+        const mats = {
+            // Room
+            wallBeige: new THREE.MeshStandardMaterial({ color: 0xd4c8b8, roughness: 0.95, metalness: 0 }),
+            floorTerrazo: new THREE.MeshStandardMaterial({ color: 0x9a9080, roughness: 0.6, metalness: 0.1 }),
+            
+            // Desk - blue/teal color
+            deskBlue: new THREE.MeshStandardMaterial({ color: 0x5b9aa9, roughness: 0.4, metalness: 0.1 }),
+            
+            // Monitors
+            monitorBlack: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3, metalness: 0.7 }),
+            screenMain: new THREE.MeshBasicMaterial({ color: 0x1a0a2a }),
+            screenSecondary: new THREE.MeshBasicMaterial({ color: 0x2a3a4a }),
+            
+            // PC Case
+            pcBlack: new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.4, metalness: 0.6 }),
+            pcGlass: new THREE.MeshStandardMaterial({ 
+                color: 0x1a1a2a, roughness: 0.1, metalness: 0.3, 
+                transparent: true, opacity: 0.6 
+            }),
+            
+            // Shelf
+            shelfBlack: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.1 }),
+            
+            // Chair
+            chairGray: new THREE.MeshStandardMaterial({ color: 0x6a6a70, roughness: 0.8, metalness: 0 }),
+            chairMetal: new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.4, metalness: 0.6 }),
+            
+            // Guitar
+            guitarBody: new THREE.MeshStandardMaterial({ color: 0xc4a060, roughness: 0.35, metalness: 0.1 }),
+            guitarNeck: new THREE.MeshStandardMaterial({ color: 0x4a3520, roughness: 0.5, metalness: 0 }),
+            guitarStrings: new THREE.MeshStandardMaterial({ color: 0xccccaa, roughness: 0.3, metalness: 0.8 }),
+            
+            // Fan
+            fanBlack: new THREE.MeshStandardMaterial({ color: 0x202020, roughness: 0.5, metalness: 0.3 }),
+            
+            // Peripherals
+            keyboardBlack: new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.5, metalness: 0.2 }),
+            mouseBlack: new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.4, metalness: 0.3 }),
+            mousepadGreen: new THREE.MeshStandardMaterial({ color: 0x5a7a3a, roughness: 0.9, metalness: 0 }),
+            
+            // Lamp
+            lampMetal: new THREE.MeshStandardMaterial({ color: 0xc0c0c0, roughness: 0.3, metalness: 0.8 }),
+            
+            // Weights
+            weightBlack: new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.6, metalness: 0.4 }),
+            weightRed: new THREE.MeshStandardMaterial({ color: 0xcc3333, roughness: 0.5, metalness: 0.2 }),
+        };
+        
+        // Book colors from the photo
+        const bookColors = [
+            0xcc4444, 0x44aa44, 0x4466cc, 0xeecc44, 0xcc44aa, 
+            0x44cccc, 0xff7733, 0x9944ff, 0xff4488, 0x88ff44,
+            0xffffff, 0x333333, 0x6688aa
+        ];
+        
+        // Room group
+        const room = new THREE.Group();
+        
+        // ==================== ROOM STRUCTURE ====================
+
+        // Floor with realistic terrazzo pattern (subtle speckles like in photo)
+        const floorGroup = new THREE.Group();
+
+        // Base floor - lighter gray/beige base color matching photo
+        const floorGeo = new THREE.PlaneGeometry(12, 12);
+        const floor = new THREE.Mesh(floorGeo, new THREE.MeshStandardMaterial({
+            color: 0xc8beb0,
+            roughness: 0.45,
+            metalness: 0.08
+        }));
+        floor.rotation.x = -Math.PI / 2;
+        floor.receiveShadow = true;
+        floorGroup.add(floor);
+
+        // Terrazzo aggregate colors - more varied like real terrazzo
+        const aggregateColors = [
+            0x5a4a3a, // dark brown chip
+            0x7a6a5a, // medium brown
+            0x3a3028, // very dark (almost black)
+            0x9a8a7a, // tan
+            0x6a5848, // brown
+            0x4a4038, // charcoal
+            0x8a7868, // warm gray
+            0xb0a090, // light tan
+            0x504840, // dark gray
+            0xa09080, // light brown
+        ];
+
+        // Create realistic terrazzo with tiny aggregate pieces
+        // Small speckles (most common)
+        for (let i = 0; i < 600; i++) {
+            const size = 0.008 + Math.random() * 0.015;
+            const speckleGeo = new THREE.CircleGeometry(size, 5);
+            const speckleMat = new THREE.MeshStandardMaterial({
+                color: aggregateColors[Math.floor(Math.random() * aggregateColors.length)],
+                roughness: 0.7,
+                metalness: 0.02
+            });
+            const speckle = new THREE.Mesh(speckleGeo, speckleMat);
+
+            speckle.position.set(
+                (Math.random() - 0.5) * 11.5,
+                0.001,
+                (Math.random() - 0.5) * 11.5
+            );
+            speckle.rotation.x = -Math.PI / 2;
+            floorGroup.add(speckle);
+        }
+
+        // Medium aggregate chips
+        for (let i = 0; i < 250; i++) {
+            const size = 0.015 + Math.random() * 0.025;
+            const chipGeo = new THREE.CircleGeometry(size, 6);
+            const chipMat = new THREE.MeshStandardMaterial({
+                color: aggregateColors[Math.floor(Math.random() * aggregateColors.length)],
+                roughness: 0.6,
+                metalness: 0.03
+            });
+            const chip = new THREE.Mesh(chipGeo, chipMat);
+
+            chip.position.set(
+                (Math.random() - 0.5) * 11.5,
+                0.0015,
+                (Math.random() - 0.5) * 11.5
+            );
+            chip.rotation.x = -Math.PI / 2;
+            chip.rotation.z = Math.random() * Math.PI * 2;
+            floorGroup.add(chip);
+        }
+
+        // Larger aggregate pieces (less common)
+        for (let i = 0; i < 100; i++) {
+            const width = 0.025 + Math.random() * 0.035;
+            const height = width * (0.6 + Math.random() * 0.6);
+            const chipGeo = new THREE.PlaneGeometry(width, height);
+            const chipMat = new THREE.MeshStandardMaterial({
+                color: aggregateColors[Math.floor(Math.random() * aggregateColors.length)],
+                roughness: 0.55,
+                metalness: 0.04,
+                side: THREE.DoubleSide
+            });
+            const chip = new THREE.Mesh(chipGeo, chipMat);
+
+            chip.position.set(
+                (Math.random() - 0.5) * 11.5,
+                0.002,
+                (Math.random() - 0.5) * 11.5
+            );
+            chip.rotation.x = -Math.PI / 2;
+            chip.rotation.z = Math.random() * Math.PI * 2;
+            floorGroup.add(chip);
+        }
+
+        // Add subtle white/cream colored chips (common in terrazzo)
+        const lightColors = [0xd8d0c8, 0xe0d8d0, 0xc8c0b8, 0xf0e8e0];
+        for (let i = 0; i < 80; i++) {
+            const size = 0.01 + Math.random() * 0.02;
+            const chipGeo = new THREE.CircleGeometry(size, 5);
+            const chipMat = new THREE.MeshStandardMaterial({
+                color: lightColors[Math.floor(Math.random() * lightColors.length)],
+                roughness: 0.5,
+                metalness: 0.05
+            });
+            const chip = new THREE.Mesh(chipGeo, chipMat);
+
+            chip.position.set(
+                (Math.random() - 0.5) * 11.5,
+                0.0018,
+                (Math.random() - 0.5) * 11.5
+            );
+            chip.rotation.x = -Math.PI / 2;
+            floorGroup.add(chip);
+        }
+
+        room.add(floorGroup);
+
+        // ==================== WALLS WITH ACOUSTIC PANEL TEXTURE ====================
+
+        // Back wall base
+        const backWall = createBox(12, 8, 0.15, mats.wallBeige, 0, 4, -6);
+        room.add(backWall);
+
+        // Right wall base
+        const rightWall = createBox(0.15, 8, 12, mats.wallBeige, 6, 4, 0);
+        room.add(rightWall);
+
+        // Acoustic panel texture on back wall (grid pattern like in photo)
+        const panelMat = new THREE.MeshStandardMaterial({
+            color: 0xd8cfc0,
+            roughness: 0.95,
+            metalness: 0
+        });
+
+        const panelMatDark = new THREE.MeshStandardMaterial({
+            color: 0xc8bfb0,
+            roughness: 0.95,
+            metalness: 0
+        });
+
+        // Create acoustic panel grid on back wall
+        const panelWidth = 0.8;
+        const panelHeight = 0.8;
+        const panelGap = 0.02;
+
+        for (let py = 0; py < 8; py++) {
+            for (let px = 0; px < 12; px++) {
+                // Alternate panel shades slightly for texture
+                const mat = (px + py) % 3 === 0 ? panelMatDark : panelMat;
+
+                const panel = createBox(panelWidth - panelGap, panelHeight - panelGap, 0.02, mat,
+                    -5.2 + px * panelWidth + panelWidth/2,
+                    0.4 + py * panelHeight + panelHeight/2,
+                    -5.9);
+                room.add(panel);
+
+                // Panel edge groove (subtle)
+                if (py > 0) {
+                    const grooveH = createBox(panelWidth - panelGap, 0.008, 0.01,
+                        new THREE.MeshStandardMaterial({ color: 0xb0a090, roughness: 0.8 }),
+                        -5.2 + px * panelWidth + panelWidth/2,
+                        0.4 + py * panelHeight,
+                        -5.88);
+                    room.add(grooveH);
+                }
+                if (px > 0) {
+                    const grooveV = createBox(0.008, panelHeight - panelGap, 0.01,
+                        new THREE.MeshStandardMaterial({ color: 0xb0a090, roughness: 0.8 }),
+                        -5.2 + px * panelWidth,
+                        0.4 + py * panelHeight + panelHeight/2,
+                        -5.88);
+                    room.add(grooveV);
+                }
+            }
+        }
+
+        // Create acoustic panel grid on right wall
+        for (let py = 0; py < 8; py++) {
+            for (let pz = 0; pz < 12; pz++) {
+                const mat = (pz + py) % 3 === 0 ? panelMatDark : panelMat;
+
+                const panel = createBox(0.02, panelHeight - panelGap, panelWidth - panelGap, mat,
+                    5.9,
+                    0.4 + py * panelHeight + panelHeight/2,
+                    -5.2 + pz * panelWidth + panelWidth/2);
+                room.add(panel);
+            }
+        }
+
+        // Wall power outlet (visible in photo)
+        const outletPlate = createBox(0.08, 0.12, 0.015, new THREE.MeshStandardMaterial({
+            color: 0xf0ebe5, roughness: 0.5
+        }), 2.8, 2.8, -5.88);
+        room.add(outletPlate);
+
+        // Outlet holes
+        const outletHole1 = createBox(0.015, 0.025, 0.01, new THREE.MeshBasicMaterial({ color: 0x2a2a2a }), 2.78, 2.82, -5.87);
+        const outletHole2 = createBox(0.015, 0.025, 0.01, new THREE.MeshBasicMaterial({ color: 0x2a2a2a }), 2.82, 2.82, -5.87);
+        room.add(outletHole1, outletHole2);
+
+        // Cable running down from outlet (visible in photo)
+        const cable = createCylinder(0.008, 0.008, 1.5, 8, new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.6
+        }), 2.8, 2.0, -5.87);
+        room.add(cable);
+        
+        // ==================== DESK ====================
+        
+        const deskGroup = new THREE.Group();
+        
+        // Desktop surface
+        const deskTop = createBox(4.5, 0.12, 2, mats.deskBlue, 0, 1.5, 0);
+        deskGroup.add(deskTop);
+        
+        // Left panel (solid side)
+        const deskLeftPanel = createBox(0.08, 1.5, 2, mats.deskBlue, -2.2, 0.75, 0);
+        deskGroup.add(deskLeftPanel);
+        
+        // Right panel (solid side)
+        const deskRightPanel = createBox(0.08, 1.5, 2, mats.deskBlue, 2.2, 0.75, 0);
+        deskGroup.add(deskRightPanel);
+        
+        // Back panel
+        const deskBackPanel = createBox(4.36, 1.5, 0.08, mats.deskBlue, 0, 0.75, -0.96);
+        deskGroup.add(deskBackPanel);
+        
+        deskGroup.position.set(1.5, 0, -4);
+        room.add(deskGroup);
+        
+        // ==================== MAIN MONITOR (Ultrawide Curved) ====================
+
+        const mainMonitorGroup = new THREE.Group();
+
+        // Monitor stand base (V-shaped like in photo)
+        const standBaseLeft = createBox(0.35, 0.025, 0.06, mats.monitorBlack, -0.15, 0.012, 0.35);
+        standBaseLeft.rotation.y = -0.4;
+        mainMonitorGroup.add(standBaseLeft);
+
+        const standBaseRight = createBox(0.35, 0.025, 0.06, mats.monitorBlack, 0.15, 0.012, 0.35);
+        standBaseRight.rotation.y = 0.4;
+        mainMonitorGroup.add(standBaseRight);
+
+        // Monitor stand neck
+        const monitorStandNeck = createBox(0.08, 0.5, 0.08, mats.monitorBlack, 0, 0.28, 0.2);
+        mainMonitorGroup.add(monitorStandNeck);
+
+        // Stand to monitor joint
+        const standJoint = createBox(0.12, 0.08, 0.15, mats.monitorBlack, 0, 0.53, 0.08);
+        mainMonitorGroup.add(standJoint);
+
+        // Create curved monitor using more segments for smoother curve
+        const curveSegments = 12;
+        const monitorWidth = 2.6;
+        const monitorHeight = 0.75;
+        const curveDepth = 0.35;
+
+        for (let i = 0; i < curveSegments; i++) {
+            const segWidth = monitorWidth / curveSegments;
+            const angle = ((i / (curveSegments - 1)) - 0.5) * Math.PI * 0.35;
+            const xPos = (i - (curveSegments - 1) / 2) * segWidth;
+            const zPos = Math.cos(angle) * curveDepth - curveDepth;
+
+            // Monitor frame segment
+            const frameSeg = createBox(segWidth + 0.015, monitorHeight, 0.06, mats.monitorBlack, xPos, 0.95, zPos);
+            frameSeg.rotation.y = -angle * 0.6;
+            mainMonitorGroup.add(frameSeg);
+
+            // Screen segment with gradient effect (dark purple base)
+            const screenColor = new THREE.MeshBasicMaterial({
+                color: new THREE.Color().setHSL(0.75 + i * 0.015, 0.5, 0.08)
+            });
+            const screenSeg = createBox(segWidth - 0.01, monitorHeight - 0.06, 0.01, screenColor, xPos, 0.95, zPos + 0.035);
+            screenSeg.rotation.y = -angle * 0.6;
+            mainMonitorGroup.add(screenSeg);
+        }
+
+        // Game scene elements - cyberpunk city/road with car
+        // Road/ground with perspective lines
+        const roadBase = createBox(2.0, 0.25, 0.01, new THREE.MeshBasicMaterial({ color: 0x150820 }), 0, 0.65, 0.08);
+        mainMonitorGroup.add(roadBase);
+
+        // Neon road lines (purple/pink)
+        const roadLine1 = createBox(0.8, 0.015, 0.01, new THREE.MeshBasicMaterial({ color: 0xff00aa }), -0.4, 0.58, 0.085);
+        const roadLine2 = createBox(0.9, 0.015, 0.01, new THREE.MeshBasicMaterial({ color: 0xff0088 }), 0.3, 0.62, 0.085);
+        const roadLine3 = createBox(1.2, 0.012, 0.01, new THREE.MeshBasicMaterial({ color: 0xaa0066 }), 0, 0.68, 0.085);
+        mainMonitorGroup.add(roadLine1, roadLine2, roadLine3);
+
+        // City skyline silhouette
+        for (let i = 0; i < 8; i++) {
+            const buildingHeight = 0.08 + Math.random() * 0.18;
+            const building = createBox(0.15 + Math.random() * 0.1, buildingHeight, 0.01,
+                new THREE.MeshBasicMaterial({ color: 0x0a0515 }),
+                -0.9 + i * 0.25, 0.95 + buildingHeight/2, 0.08);
+            mainMonitorGroup.add(building);
+
+            // Building window lights
+            if (Math.random() > 0.4) {
+                const windowLight = createBox(0.02, 0.015, 0.005,
+                    new THREE.MeshBasicMaterial({ color: 0xff66aa }),
+                    -0.88 + i * 0.25, 0.95 + buildingHeight * 0.4, 0.09);
+                mainMonitorGroup.add(windowLight);
+            }
+        }
+
+        // Car silhouette (centered, pink/magenta glow)
+        const carBody = createBox(0.28, 0.08, 0.015, new THREE.MeshBasicMaterial({ color: 0x220033 }), 0, 0.72, 0.09);
+        mainMonitorGroup.add(carBody);
+
+        // Car roof
+        const carRoof = createBox(0.15, 0.05, 0.015, new THREE.MeshBasicMaterial({ color: 0x1a0025 }), 0, 0.78, 0.09);
+        mainMonitorGroup.add(carRoof);
+
+        // Car headlights/taillights glow
+        const carGlowLeft = createBox(0.025, 0.02, 0.01, new THREE.MeshBasicMaterial({ color: 0xff0066 }), -0.15, 0.71, 0.095);
+        const carGlowRight = createBox(0.025, 0.02, 0.01, new THREE.MeshBasicMaterial({ color: 0xff0066 }), 0.15, 0.71, 0.095);
+        mainMonitorGroup.add(carGlowLeft, carGlowRight);
+
+        // Neon reflections/ambient light streaks
+        const neonStreak1 = createBox(0.6, 0.08, 0.01, new THREE.MeshBasicMaterial({
+            color: 0xcc00ff, transparent: true, opacity: 0.6
+        }), -0.5, 1.1, 0.082);
+        const neonStreak2 = createBox(0.5, 0.06, 0.01, new THREE.MeshBasicMaterial({
+            color: 0xff00cc, transparent: true, opacity: 0.5
+        }), 0.4, 1.05, 0.082);
+        const neonStreak3 = createBox(0.4, 0.1, 0.01, new THREE.MeshBasicMaterial({
+            color: 0x8800ff, transparent: true, opacity: 0.4
+        }), 0.7, 0.95, 0.082);
+        mainMonitorGroup.add(neonStreak1, neonStreak2, neonStreak3);
+
+        // Monitor bezel bottom (thicker like in photo)
+        const bezelBottom = createBox(2.5, 0.04, 0.07, mats.monitorBlack, 0, 0.54, 0);
+        mainMonitorGroup.add(bezelBottom);
+
+        mainMonitorGroup.position.set(1.5, 1.56, -4.5);
+        room.add(mainMonitorGroup);
+        
+        // ==================== SECONDARY MONITOR (Security Camera Feed - positioned above left of main) ====================
+
+        const secMonitorGroup = new THREE.Group();
+
+        // Wall mount plate
+        const mountPlate = createBox(0.08, 0.08, 0.03, mats.monitorBlack, 0, 0, -0.55);
+        secMonitorGroup.add(mountPlate);
+
+        // Monitor arm - vertical part from wall
+        const mountArmVert = createBox(0.04, 0.04, 0.35, mats.monitorBlack, 0, 0, -0.35);
+        secMonitorGroup.add(mountArmVert);
+
+        // Monitor arm - tilt mechanism
+        const tiltJoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.03, 10, 10),
+            mats.monitorBlack
+        );
+        tiltJoint.position.set(0, 0, -0.18);
+        secMonitorGroup.add(tiltJoint);
+
+        // Monitor frame (smaller, square-ish)
+        const secMonitorFrame = createBox(0.75, 0.52, 0.04, mats.monitorBlack, 0, 0, 0);
+        secMonitorGroup.add(secMonitorFrame);
+
+        // Screen with camera feed look
+        const secScreen = createBox(0.68, 0.45, 0.01, mats.screenSecondary, 0, 0, 0.025);
+        secMonitorGroup.add(secScreen);
+
+        // Camera feed elements (bed/room view - more detailed)
+        const feedBg = createBox(0.65, 0.42, 0.005, new THREE.MeshBasicMaterial({ color: 0x3a4a5a }), 0, 0, 0.03);
+        secMonitorGroup.add(feedBg);
+
+        // Room elements in camera view
+        const feedBed = createBox(0.25, 0.12, 0.005, new THREE.MeshBasicMaterial({ color: 0x556677 }), 0.1, -0.08, 0.032);
+        const feedWall = createBox(0.6, 0.15, 0.005, new THREE.MeshBasicMaterial({ color: 0x4a5a6a }), 0, 0.12, 0.032);
+        const feedFloor = createBox(0.6, 0.1, 0.005, new THREE.MeshBasicMaterial({ color: 0x3a3a4a }), 0, -0.16, 0.032);
+        secMonitorGroup.add(feedBed, feedWall, feedFloor);
+
+        // Camera timestamp overlay
+        const timestamp = createBox(0.2, 0.03, 0.003, new THREE.MeshBasicMaterial({ color: 0x88aa88 }), 0.2, 0.18, 0.035);
+        secMonitorGroup.add(timestamp);
+
+        // Tilt the monitor slightly down toward user
+        secMonitorGroup.rotation.x = 0.15;
+        secMonitorGroup.position.set(0.6, 3.35, -5.0);
+        room.add(secMonitorGroup);
+
+        // ==================== THIRD MONITOR (Dark/Off - positioned above right of main) ====================
+
+        const thirdMonitorGroup = new THREE.Group();
+
+        // Wall mount plate
+        const mountPlate3 = createBox(0.08, 0.08, 0.03, mats.monitorBlack, 0, 0, -0.55);
+        thirdMonitorGroup.add(mountPlate3);
+
+        // Monitor arm from wall
+        const mountArm3 = createBox(0.04, 0.04, 0.35, mats.monitorBlack, 0, 0, -0.35);
+        thirdMonitorGroup.add(mountArm3);
+
+        // Tilt joint
+        const tiltJoint3 = new THREE.Mesh(
+            new THREE.SphereGeometry(0.03, 10, 10),
+            mats.monitorBlack
+        );
+        tiltJoint3.position.set(0, 0, -0.18);
+        thirdMonitorGroup.add(tiltJoint3);
+
+        // Monitor frame (vertical/portrait orientation)
+        const thirdMonitorFrame = createBox(0.52, 0.75, 0.04, mats.monitorBlack, 0, 0, 0);
+        thirdMonitorGroup.add(thirdMonitorFrame);
+
+        // Dark screen (off but with subtle reflection)
+        const thirdScreen = createBox(0.46, 0.68, 0.01, new THREE.MeshStandardMaterial({
+            color: 0x08080c,
+            roughness: 0.2,
+            metalness: 0.1
+        }), 0, 0, 0.025);
+        thirdMonitorGroup.add(thirdScreen);
+
+        // Subtle ambient reflection on screen
+        const screenReflection = createBox(0.2, 0.4, 0.005, new THREE.MeshBasicMaterial({
+            color: 0x151520,
+            transparent: true,
+            opacity: 0.3
+        }), 0.08, 0.05, 0.028);
+        thirdMonitorGroup.add(screenReflection);
+
+        // Power LED (standby orange)
+        const powerLed = createBox(0.008, 0.008, 0.003, new THREE.MeshBasicMaterial({ color: 0xff6600 }), 0.2, -0.32, 0.025);
+        thirdMonitorGroup.add(powerLed);
+
+        // Tilt the monitor slightly down
+        thirdMonitorGroup.rotation.x = 0.15;
+        thirdMonitorGroup.position.set(2.3, 3.35, -5.0);
+        room.add(thirdMonitorGroup);
+        
+        // ==================== PC CASE (Gaming with RGB) ====================
+
+        const pcGroup = new THREE.Group();
+
+        // Main case body (darker, more detailed)
+        const pcMain = createBox(0.48, 1.1, 0.52, mats.pcBlack, 0, 0.55, 0);
+        pcGroup.add(pcMain);
+
+        // Top panel with mesh vents
+        const pcTop = createBox(0.5, 0.025, 0.54, mats.pcBlack, 0, 1.12, 0);
+        pcGroup.add(pcTop);
+
+        // Top vent grid pattern
+        for (let i = 0; i < 3; i++) {
+            for (let j = 0; j < 8; j++) {
+                const vent = createBox(0.04, 0.01, 0.005, new THREE.MeshBasicMaterial({ color: 0x0a0a0a }),
+                    -0.15 + j * 0.04, 1.13, -0.12 + i * 0.12);
+                pcGroup.add(vent);
+            }
+        }
+
+        // Front panel (mesh style with RGB visible)
+        const pcFrontFrame = createBox(0.5, 1.05, 0.04, mats.pcBlack, 0, 0.53, 0.28);
+        pcGroup.add(pcFrontFrame);
+
+        // Front mesh area (darker inset)
+        const pcFrontMesh = createBox(0.38, 0.85, 0.02, new THREE.MeshStandardMaterial({
+            color: 0x080808, roughness: 0.8
+        }), 0, 0.55, 0.29);
+        pcGroup.add(pcFrontMesh);
+
+        // Front RGB accent strip
+        const frontRgbStrip = createBox(0.36, 0.015, 0.01, new THREE.MeshBasicMaterial({ color: 0x00ffff }), 0, 1.0, 0.3);
+        pcGroup.add(frontRgbStrip);
+
+        // Glass side panel (left side, showing RGB) - larger and more visible
+        const pcGlass = createBox(0.015, 0.95, 0.48, new THREE.MeshStandardMaterial({
+            color: 0x1a1a30, roughness: 0.05, metalness: 0.4,
+            transparent: true, opacity: 0.5
+        }), -0.25, 0.55, 0);
+        pcGroup.add(pcGlass);
+
+        // Glass panel frame
+        const glassFrameTop = createBox(0.025, 0.025, 0.5, mats.pcBlack, -0.25, 1.04, 0);
+        const glassFrameBottom = createBox(0.025, 0.025, 0.5, mats.pcBlack, -0.25, 0.06, 0);
+        pcGroup.add(glassFrameTop, glassFrameBottom);
+
+        // RGB Fans visible through glass - 3 rows of 2 (like in photo)
+        const rgbFans = [];
+        const fanPositions = [
+            { x: -0.24, y: 0.88, z: 0.13 },
+            { x: -0.24, y: 0.88, z: -0.13 },
+            { x: -0.24, y: 0.55, z: 0.13 },
+            { x: -0.24, y: 0.55, z: -0.13 },
+            { x: -0.24, y: 0.22, z: 0.13 },
+            { x: -0.24, y: 0.22, z: -0.13 },
+        ];
+
+        fanPositions.forEach((pos, i) => {
+            // Fan housing (black square frame)
+            const fanFrame = new THREE.Mesh(
+                new THREE.BoxGeometry(0.015, 0.24, 0.24),
+                new THREE.MeshStandardMaterial({ color: 0x0a0a0a })
+            );
+            fanFrame.position.set(pos.x + 0.005, pos.y, pos.z);
+            pcGroup.add(fanFrame);
+
+            // Outer RGB ring (brighter)
+            const rgbRingOuter = new THREE.Mesh(
+                new THREE.TorusGeometry(0.1, 0.012, 8, 24),
+                new THREE.MeshBasicMaterial({ color: 0x00ffff })
+            );
+            rgbRingOuter.position.set(pos.x - 0.005, pos.y, pos.z);
+            rgbRingOuter.rotation.y = Math.PI / 2;
+            pcGroup.add(rgbRingOuter);
+            rgbFans.push(rgbRingOuter);
+
+            // Inner RGB ring
+            const rgbRingInner = new THREE.Mesh(
+                new THREE.TorusGeometry(0.06, 0.008, 8, 20),
+                new THREE.MeshBasicMaterial({ color: 0xff00ff })
+            );
+            rgbRingInner.position.set(pos.x - 0.006, pos.y, pos.z);
+            rgbRingInner.rotation.y = Math.PI / 2;
+            pcGroup.add(rgbRingInner);
+
+            // Fan hub (center)
+            const fanHub = new THREE.Mesh(
+                new THREE.CircleGeometry(0.03, 16),
+                new THREE.MeshBasicMaterial({ color: 0x1a1a1a })
+            );
+            fanHub.position.set(pos.x - 0.008, pos.y, pos.z);
+            fanHub.rotation.y = Math.PI / 2;
+            pcGroup.add(fanHub);
+
+            // Fan blades (5 blade style)
+            for (let b = 0; b < 5; b++) {
+                const bladeAngle = (b / 5) * Math.PI * 2;
+                const blade = new THREE.Mesh(
+                    new THREE.PlaneGeometry(0.06, 0.025),
+                    new THREE.MeshBasicMaterial({
+                        color: 0x151520, transparent: true, opacity: 0.7, side: THREE.DoubleSide
+                    })
+                );
+                blade.position.set(
+                    pos.x - 0.007,
+                    pos.y + Math.sin(bladeAngle) * 0.05,
+                    pos.z + Math.cos(bladeAngle) * 0.05
+                );
+                blade.rotation.y = Math.PI / 2;
+                blade.rotation.x = bladeAngle;
+                pcGroup.add(blade);
+            }
+        });
+
+        // Internal RGB strip (vertical along back)
+        const rgbStrip = createBox(0.01, 0.9, 0.015, new THREE.MeshBasicMaterial({ color: 0xff00ff }), -0.15, 0.5, -0.22);
+        pcGroup.add(rgbStrip);
+
+        // GPU/motherboard glow visible through glass
+        const gpuGlow = createBox(0.12, 0.04, 0.25, new THREE.MeshBasicMaterial({
+            color: 0x6600ff, transparent: true, opacity: 0.6
+        }), -0.1, 0.45, 0);
+        pcGroup.add(gpuGlow);
+
+        // RAM stick RGB
+        const ramGlow1 = createBox(0.015, 0.15, 0.01, new THREE.MeshBasicMaterial({ color: 0x00ff88 }), -0.05, 0.75, -0.08);
+        const ramGlow2 = createBox(0.015, 0.15, 0.01, new THREE.MeshBasicMaterial({ color: 0x00ff88 }), -0.05, 0.75, -0.04);
+        pcGroup.add(ramGlow1, ramGlow2);
+
+        // Right side panel (solid)
+        const pcRightPanel = createBox(0.015, 0.95, 0.48, mats.pcBlack, 0.25, 0.55, 0);
+        pcGroup.add(pcRightPanel);
+
+        // Back panel with IO
+        const pcBack = createBox(0.5, 1.05, 0.04, mats.pcBlack, 0, 0.53, -0.28);
+        pcGroup.add(pcBack);
+
+        // Bottom feet
+        const footPositions = [[-0.18, -0.2], [-0.18, 0.2], [0.18, -0.2], [0.18, 0.2]];
+        footPositions.forEach(fp => {
+            const foot = createCylinder(0.025, 0.03, 0.03, 12, new THREE.MeshStandardMaterial({
+                color: 0x1a1a1a, roughness: 0.3
+            }), fp[0], 0.015, fp[1]);
+            pcGroup.add(foot);
+        });
+
+        pcGroup.position.set(3.5, 1.56, -4.2);
+        room.add(pcGroup);
+        
+        // ==================== KEYBOARD (Mechanical with RGB) ====================
+
+        const keyboardGroup = new THREE.Group();
+
+        // Base plate (aluminum looking)
+        const kbBaseBottom = createBox(0.92, 0.015, 0.36, new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.4, metalness: 0.3
+        }), 0, 0.0075, 0);
+        keyboardGroup.add(kbBaseBottom);
+
+        // Base with RGB diffuser layer
+        const kbBase = createBox(0.9, 0.025, 0.34, new THREE.MeshStandardMaterial({
+            color: 0x252525, roughness: 0.5
+        }), 0, 0.0275, 0);
+        keyboardGroup.add(kbBase);
+
+        // RGB backlight layer (visible between keys)
+        const kbRgbLayer = createBox(0.88, 0.003, 0.32, new THREE.MeshBasicMaterial({
+            color: 0xff0066
+        }), 0, 0.041, 0);
+        keyboardGroup.add(kbRgbLayer);
+
+        // Key switch plate
+        const kbPlate = createBox(0.88, 0.008, 0.32, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.6
+        }), 0, 0.048, 0);
+        keyboardGroup.add(kbPlate);
+
+        // Create keycaps with RGB glow beneath each
+        const keyColors = [0x2a2a2a, 0x2d2d2d, 0x282828, 0x2f2f2f]; // Slight variation
+        const rgbColors = [0xff0066, 0xff00aa, 0xaa00ff, 0x6600ff, 0x00aaff, 0x00ffaa];
+
+        for (let row = 0; row < 5; row++) {
+            for (let col = 0; col < 15; col++) {
+                // Variable key sizes for realistic layout
+                let keyWidth = 0.048;
+                if (col === 0 && row === 4) keyWidth = 0.07; // Ctrl
+                if (col === 14 && row === 0) keyWidth = 0.065; // Backspace
+                if (col === 14 && row === 2) keyWidth = 0.08; // Enter
+                if (col === 14 && row === 4) keyWidth = 0.07; // Ctrl
+
+                const xPos = -0.38 + col * 0.055;
+                const zPos = 0.11 - row * 0.065;
+
+                // RGB glow under each key
+                const keyGlow = createBox(keyWidth - 0.008, 0.002, 0.04,
+                    new THREE.MeshBasicMaterial({
+                        color: rgbColors[(row + col) % rgbColors.length],
+                        transparent: true,
+                        opacity: 0.8
+                    }), xPos, 0.044, zPos);
+                keyboardGroup.add(keyGlow);
+
+                // Keycap (slightly rounded appearance using box)
+                const keycap = createBox(keyWidth, 0.018, 0.045,
+                    new THREE.MeshStandardMaterial({
+                        color: keyColors[Math.floor(Math.random() * keyColors.length)],
+                        roughness: 0.5,
+                        metalness: 0.05
+                    }), xPos, 0.062, zPos);
+                keyboardGroup.add(keycap);
+
+                // Keycap top surface (lighter)
+                const keycapTop = createBox(keyWidth - 0.006, 0.003, 0.038,
+                    new THREE.MeshStandardMaterial({
+                        color: 0x3a3a3a,
+                        roughness: 0.7
+                    }), xPos, 0.072, zPos);
+                keyboardGroup.add(keycapTop);
+            }
+        }
+
+        // Spacebar (row 4, center)
+        const spacebarGlow = createBox(0.28, 0.002, 0.04, new THREE.MeshBasicMaterial({
+            color: 0xff0088
+        }), 0.05, 0.044, 0.11 - 4 * 0.065);
+        keyboardGroup.add(spacebarGlow);
+
+        const spacebar = createBox(0.3, 0.015, 0.045, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.5
+        }), 0.05, 0.06, 0.11 - 4 * 0.065);
+        keyboardGroup.add(spacebar);
+
+        // RGB side strips
+        const sideStripL = createBox(0.008, 0.015, 0.32, new THREE.MeshBasicMaterial({ color: 0xff0066 }), -0.45, 0.035, 0);
+        const sideStripR = createBox(0.008, 0.015, 0.32, new THREE.MeshBasicMaterial({ color: 0xff0066 }), 0.45, 0.035, 0);
+        keyboardGroup.add(sideStripL, sideStripR);
+
+        // USB cable exit
+        const cableExit = createCylinder(0.015, 0.015, 0.03, 10, mats.keyboardBlack, 0, 0.02, -0.18);
+        cableExit.rotation.x = Math.PI / 2;
+        keyboardGroup.add(cableExit);
+
+        keyboardGroup.position.set(1.3, 1.56, -3.6);
+        room.add(keyboardGroup);
+        
+        // ==================== MOUSE & MOUSEPAD ====================
+        
+        // Mousepad
+        const mousepad = createBox(0.55, 0.02, 0.45, mats.mousepadGreen, 2.6, 1.57, -3.5);
+        room.add(mousepad);
+        
+        // Mouse with ergonomic shape (using sphere + box combination)
+        const mouseGroup = new THREE.Group();
+        
+        // Mouse body - elongated sphere
+        const mouseBody = new THREE.Mesh(
+            new THREE.SphereGeometry(0.06, 16, 12),
+            mats.mouseBlack
+        );
+        mouseBody.scale.set(0.8, 0.5, 1.3);
+        mouseBody.position.y = 0.035;
+        mouseGroup.add(mouseBody);
+        
+        // Mouse top surface
+        const mouseTop = new THREE.Mesh(
+            new THREE.SphereGeometry(0.055, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+            mats.mouseBlack
+        );
+        mouseTop.scale.set(0.75, 0.6, 1.2);
+        mouseTop.position.y = 0.03;
+        mouseGroup.add(mouseTop);
+        
+        // Scroll wheel
+        const scrollWheel = createCylinder(0.012, 0.012, 0.025, 12, 
+            new THREE.MeshStandardMaterial({ color: 0x4a4a4a }), 0, 0.055, -0.02);
+        scrollWheel.rotation.x = Math.PI / 2;
+        mouseGroup.add(scrollWheel);
+        
+        // Left click button line
+        const buttonLine = createBox(0.002, 0.002, 0.04, 
+            new THREE.MeshStandardMaterial({ color: 0x0a0a0a }), 0, 0.058, -0.03);
+        mouseGroup.add(buttonLine);
+        
+        mouseGroup.position.set(2.6, 1.58, -3.5);
+        room.add(mouseGroup);
+        
+        // ==================== LAMP (Articulated desk lamp like in photo) ====================
+
+        const lampGroup = new THREE.Group();
+
+        // Brushed metal material for lamp
+        const brushedMetal = new THREE.MeshStandardMaterial({
+            color: 0xb8b4a8,
+            roughness: 0.35,
+            metalness: 0.75
+        });
+
+        const chromeMetal = new THREE.MeshStandardMaterial({
+            color: 0xd0d0d0,
+            roughness: 0.2,
+            metalness: 0.9
+        });
+
+        // Heavy circular base
+        const lampBaseBottom = createCylinder(0.12, 0.13, 0.015, 24, brushedMetal, 0, 0.0075, 0);
+        lampGroup.add(lampBaseBottom);
+
+        const lampBaseTop = createCylinder(0.11, 0.12, 0.02, 24, brushedMetal, 0, 0.025, 0);
+        lampGroup.add(lampBaseTop);
+
+        // Base center cap
+        const baseCap = createCylinder(0.03, 0.035, 0.015, 16, chromeMetal, 0, 0.04, 0);
+        lampGroup.add(baseCap);
+
+        // Lower arm (vertical portion)
+        const lowerArm = createCylinder(0.012, 0.014, 0.4, 12, brushedMetal, 0, 0.24, 0);
+        lampGroup.add(lowerArm);
+
+        // First joint (spring loaded style)
+        const joint1Base = createCylinder(0.025, 0.025, 0.04, 14, chromeMetal, 0, 0.46, 0);
+        lampGroup.add(joint1Base);
+
+        // Spring coils (decorative)
+        for (let i = 0; i < 3; i++) {
+            const springCoil = new THREE.Mesh(
+                new THREE.TorusGeometry(0.02, 0.003, 8, 20),
+                chromeMetal
+            );
+            springCoil.position.set(0.025, 0.44 + i * 0.015, 0);
+            springCoil.rotation.y = Math.PI / 2;
+            lampGroup.add(springCoil);
+        }
+
+        // Upper arm segment 1 (angled up)
+        const upperArm1 = createCylinder(0.01, 0.012, 0.35, 10, brushedMetal, 0.12, 0.62, 0);
+        upperArm1.rotation.z = -Math.PI / 4;
+        lampGroup.add(upperArm1);
+
+        // Second joint (elbow)
+        const joint2 = new THREE.Mesh(
+            new THREE.SphereGeometry(0.022, 12, 10),
+            chromeMetal
+        );
+        joint2.position.set(0.24, 0.78, 0);
+        lampGroup.add(joint2);
+
+        // Upper arm segment 2 (angled forward/down toward desk)
+        const upperArm2 = createCylinder(0.009, 0.01, 0.22, 10, brushedMetal, 0.32, 0.7, 0.08);
+        upperArm2.rotation.z = Math.PI / 6;
+        upperArm2.rotation.x = -0.4;
+        lampGroup.add(upperArm2);
+
+        // Lamp head (dome/shade)
+        const shadeOuter = new THREE.Mesh(
+            new THREE.SphereGeometry(0.1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+            brushedMetal
+        );
+        shadeOuter.position.set(0.38, 0.62, 0.15);
+        shadeOuter.rotation.x = Math.PI * 0.8;
+        shadeOuter.rotation.z = 0.3;
+        lampGroup.add(shadeOuter);
+
+        // Shade inner (reflective)
+        const shadeInner = new THREE.Mesh(
+            new THREE.SphereGeometry(0.095, 18, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+            new THREE.MeshStandardMaterial({
+                color: 0xe8e4dc,
+                roughness: 0.2,
+                metalness: 0.3,
+                side: THREE.BackSide
+            })
+        );
+        shadeInner.position.set(0.38, 0.62, 0.15);
+        shadeInner.rotation.x = Math.PI * 0.8;
+        shadeInner.rotation.z = 0.3;
+        lampGroup.add(shadeInner);
+
+        // Shade rim
+        const shadeRim = new THREE.Mesh(
+            new THREE.TorusGeometry(0.095, 0.008, 8, 24),
+            chromeMetal
+        );
+        shadeRim.position.set(0.38, 0.55, 0.2);
+        shadeRim.rotation.x = Math.PI * 0.3;
+        shadeRim.rotation.z = 0.3;
+        lampGroup.add(shadeRim);
+
+        // Light bulb inside (visible glow)
+        const bulb = new THREE.Mesh(
+            new THREE.SphereGeometry(0.025, 12, 10),
+            new THREE.MeshBasicMaterial({
+                color: 0xfffde8,
+                transparent: true,
+                opacity: 0.9
+            })
+        );
+        bulb.position.set(0.38, 0.6, 0.16);
+        lampGroup.add(bulb);
+
+        // Socket/bulb holder
+        const socket = createCylinder(0.015, 0.012, 0.025, 10, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.6
+        }), 0.38, 0.65, 0.14);
+        socket.rotation.x = Math.PI * 0.3;
+        lampGroup.add(socket);
+
+        lampGroup.position.set(3.0, 1.56, -4.5);
+        room.add(lampGroup);
+        
+        // ==================== BOOKSHELF ====================
+        
+        const shelfGroup = new THREE.Group();
+        
+        // Frame - back
+        const shelfBack = createBox(1.1, 4.2, 0.08, mats.shelfBlack, 0, 2.1, -0.2);
+        shelfGroup.add(shelfBack);
+        
+        // Frame - sides
+        const shelfLeftSide = createBox(0.08, 4.2, 0.5, mats.shelfBlack, -0.51, 2.1, 0.05);
+        const shelfRightSide = createBox(0.08, 4.2, 0.5, mats.shelfBlack, 0.51, 2.1, 0.05);
+        shelfGroup.add(shelfLeftSide, shelfRightSide);
+        
+        // Shelves (5 levels)
+        const shelfHeights = [0.05, 0.9, 1.75, 2.6, 3.45];
+        shelfHeights.forEach(h => {
+            const shelf = createBox(1.02, 0.06, 0.45, mats.shelfBlack, 0, h, 0.05);
+            shelfGroup.add(shelf);
+        });
+        
+        // Top shelf (closed box/speaker)
+        const topBox = createBox(0.6, 0.55, 0.45, mats.shelfBlack, 0, 4.0, 0.05);
+        shelfGroup.add(topBox);
+        
+        // Books on each shelf
+        const shelfBookPositions = [
+            { y: 0.08, count: 8 },
+            { y: 0.93, count: 9 },
+            { y: 1.78, count: 7 },
+            { y: 2.63, count: 8 },
+        ];
+        
+        shelfBookPositions.forEach(shelf => {
+            let xPos = -0.42;
+            for (let i = 0; i < shelf.count && xPos < 0.4; i++) {
+                const bookWidth = 0.04 + Math.random() * 0.06;
+                const bookHeight = 0.35 + Math.random() * 0.35;
+                const bookDepth = 0.2 + Math.random() * 0.15;
+                const bookColor = bookColors[Math.floor(Math.random() * bookColors.length)];
+                
+                const book = createBox(
+                    bookWidth, bookHeight, bookDepth,
+                    new THREE.MeshStandardMaterial({ color: bookColor, roughness: 0.7 }),
+                    xPos + bookWidth / 2, shelf.y + bookHeight / 2, 0.1
+                );
+                
+                // Slight random tilt
+                book.rotation.z = (Math.random() - 0.5) * 0.08;
+                shelfGroup.add(book);
+                xPos += bookWidth + 0.015;
+            }
+        });
+        
+        // Some items on shelves (bottles, boxes)
+        const bottleGeo = new THREE.CylinderGeometry(0.03, 0.035, 0.15, 8);
+        const bottle = new THREE.Mesh(bottleGeo, new THREE.MeshStandardMaterial({ color: 0x334455 }));
+        bottle.position.set(0.35, 2.7, 0.15);
+        shelfGroup.add(bottle);
+        
+        // Small boxes
+        const smallBox1 = createBox(0.15, 0.1, 0.12, new THREE.MeshStandardMaterial({ color: 0xddccbb }), -0.35, 3.5, 0.12);
+        const smallBox2 = createBox(0.12, 0.08, 0.1, new THREE.MeshStandardMaterial({ color: 0xccbbaa }), 0.3, 3.52, 0.1);
+        shelfGroup.add(smallBox1, smallBox2);
+        
+        shelfGroup.position.set(-2, 0, -5.2);
+        room.add(shelfGroup);
+        
+        // ==================== GUITAR (Acoustic Guitar - Figure-8 Body) ====================
+
+        const guitarGroup = new THREE.Group();
+
+        // Wood materials - natural amber/honey color
+        const gtBodyTop = new THREE.MeshStandardMaterial({ color: 0xd4a050, roughness: 0.35, metalness: 0.02 });
+        const gtBodySide = new THREE.MeshStandardMaterial({ color: 0x8b5a30, roughness: 0.4, metalness: 0.02 });
+        const gtNeck = new THREE.MeshStandardMaterial({ color: 0xc49040, roughness: 0.35, metalness: 0 });
+        const gtFretboard = new THREE.MeshStandardMaterial({ color: 0x3d2817, roughness: 0.5, metalness: 0 });
+        const gtBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0 });
+
+        const bodyDepth = 0.09;
+
+        // ===== GUITAR BODY (Figure-8 shape: lower bout + upper bout + waist) =====
+
+        // Lower bout (larger, bottom part of guitar)
+        const lowerBout = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.18, 0.18, bodyDepth, 32),
+            gtBodyTop
+        );
+        lowerBout.rotation.x = Math.PI / 2;
+        lowerBout.position.set(0, 0.20, 0);
+        guitarGroup.add(lowerBout);
+
+        // Upper bout (smaller, top part of guitar body)
+        const upperBout = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.13, 0.13, bodyDepth, 32),
+            gtBodyTop
+        );
+        upperBout.rotation.x = Math.PI / 2;
+        upperBout.position.set(0, 0.46, 0);
+        guitarGroup.add(upperBout);
+
+        // Waist (narrow middle section connecting bouts)
+        const waistBody = createBox(0.22, 0.14, bodyDepth, gtBodyTop, 0, 0.33, 0);
+        guitarGroup.add(waistBody);
+
+        // Side curves to smooth the waist (left and right indents)
+        const waistCurveL = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, bodyDepth + 0.01, 16),
+            gtBodySide
+        );
+        waistCurveL.rotation.x = Math.PI / 2;
+        waistCurveL.position.set(-0.16, 0.33, 0);
+        guitarGroup.add(waistCurveL);
+
+        const waistCurveR = new THREE.Mesh(
+            new THREE.CylinderGeometry(0.06, 0.06, bodyDepth + 0.01, 16),
+            gtBodySide
+        );
+        waistCurveR.rotation.x = Math.PI / 2;
+        waistCurveR.position.set(0.16, 0.33, 0);
+        guitarGroup.add(waistCurveR);
+
+        // Body edge/binding (front)
+        const lowerBoutEdge = new THREE.Mesh(
+            new THREE.TorusGeometry(0.18, 0.008, 8, 32),
+            new THREE.MeshStandardMaterial({ color: 0xf5efe0 })
+        );
+        lowerBoutEdge.position.set(0, 0.20, bodyDepth/2);
+        guitarGroup.add(lowerBoutEdge);
+
+        const upperBoutEdge = new THREE.Mesh(
+            new THREE.TorusGeometry(0.13, 0.008, 8, 32),
+            new THREE.MeshStandardMaterial({ color: 0xf5efe0 })
+        );
+        upperBoutEdge.position.set(0, 0.46, bodyDepth/2);
+        guitarGroup.add(upperBoutEdge);
+
+        // Sound hole (in upper part of lower bout)
+        const gtSoundHole = new THREE.Mesh(
+            new THREE.CircleGeometry(0.042, 32),
+            gtBlack
+        );
+        gtSoundHole.position.set(0, 0.28, bodyDepth/2 + 0.001);
+        guitarGroup.add(gtSoundHole);
+
+        // Rosette ring
+        const gtRosette = new THREE.Mesh(
+            new THREE.RingGeometry(0.042, 0.052, 32),
+            new THREE.MeshStandardMaterial({ color: 0x5a3d20, roughness: 0.4 })
+        );
+        gtRosette.position.set(0, 0.28, bodyDepth/2 + 0.002);
+        guitarGroup.add(gtRosette);
+
+        // Pickguard (black, below sound hole)
+        const pickguardShape = new THREE.Shape();
+        pickguardShape.moveTo(0, 0);
+        pickguardShape.quadraticCurveTo(0.07, 0.01, 0.06, 0.08);
+        pickguardShape.quadraticCurveTo(0.04, 0.12, 0, 0.10);
+        pickguardShape.quadraticCurveTo(-0.02, 0.06, 0, 0);
+        const gtPickguard = new THREE.Mesh(
+            new THREE.ShapeGeometry(pickguardShape),
+            gtBlack
+        );
+        gtPickguard.position.set(-0.02, 0.14, bodyDepth/2 + 0.002);
+        guitarGroup.add(gtPickguard);
+
+        // Bridge
+        const gtBridge = createBox(0.10, 0.015, 0.012, gtFretboard, 0, 0.10, bodyDepth/2 + 0.003);
+        guitarGroup.add(gtBridge);
+
+        // Saddle
+        const gtSaddle = createBox(0.08, 0.004, 0.006, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, 0.105, bodyDepth/2 + 0.010);
+        guitarGroup.add(gtSaddle);
+
+        // ===== NECK =====
+        const neckStartY = 0.54;
+        const neckLength = 0.50;
+
+        const gtNeckBody = createBox(0.036, neckLength, 0.016, gtNeck, 0, neckStartY + neckLength/2, 0);
+        guitarGroup.add(gtNeckBody);
+
+        // Fretboard
+        const gtFretboardMesh = createBox(0.034, neckLength - 0.02, 0.005, gtFretboard, 0, neckStartY + neckLength/2, 0.0105);
+        guitarGroup.add(gtFretboardMesh);
+
+        // Frets
+        const gtFretMat = new THREE.MeshStandardMaterial({ color: 0xc8c8c0, roughness: 0.2, metalness: 0.8 });
+        for (let i = 0; i < 16; i++) {
+            const fretY = neckStartY + 0.025 + i * 0.029;
+            if (fretY < neckStartY + neckLength - 0.02) {
+                const gtFret = createBox(0.036, 0.002, 0.006, gtFretMat, 0, fretY, 0.013);
+                guitarGroup.add(gtFret);
+            }
+        }
+
+        // Fret markers
+        [3, 5, 7, 9, 12].forEach(fretNum => {
+            const markerY = neckStartY + 0.025 + (fretNum - 0.5) * 0.029;
+            if (markerY < neckStartY + neckLength - 0.02) {
+                const marker = new THREE.Mesh(
+                    new THREE.CircleGeometry(0.003, 8),
+                    new THREE.MeshStandardMaterial({ color: 0xf0e8d8 })
+                );
+                marker.position.set(0, markerY, 0.014);
+                guitarGroup.add(marker);
+            }
+        });
+
+        // ===== HEADSTOCK =====
+        const headstockY = neckStartY + neckLength;
+        const gtHeadstock = createBox(0.040, 0.11, 0.014, gtNeck, 0, headstockY + 0.055, -0.003);
+        guitarGroup.add(gtHeadstock);
+
+        // Nut
+        const gtNut = createBox(0.036, 0.005, 0.006, new THREE.MeshStandardMaterial({ color: 0xf5f0e0 }), 0, headstockY, 0.010);
+        guitarGroup.add(gtNut);
+
+        // Tuning pegs
+        const gtTunerMat = new THREE.MeshStandardMaterial({ color: 0xd0d0c8, roughness: 0.3, metalness: 0.7 });
+        const gtTunerButton = new THREE.MeshStandardMaterial({ color: 0xf0e8d8, roughness: 0.4 });
+        for (let i = 0; i < 3; i++) {
+            const tunerPostL = createCylinder(0.004, 0.004, 0.018, 8, gtTunerMat, -0.030, headstockY + 0.025 + i * 0.030, -0.003);
+            tunerPostL.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerPostL);
+            const tunerButtonL = createCylinder(0.009, 0.007, 0.016, 8, gtTunerButton, -0.044, headstockY + 0.025 + i * 0.030, -0.003);
+            tunerButtonL.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerButtonL);
+
+            const tunerPostR = createCylinder(0.004, 0.004, 0.018, 8, gtTunerMat, 0.030, headstockY + 0.025 + i * 0.030, -0.003);
+            tunerPostR.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerPostR);
+            const tunerButtonR = createCylinder(0.009, 0.007, 0.016, 8, gtTunerButton, 0.044, headstockY + 0.025 + i * 0.030, -0.003);
+            tunerButtonR.rotation.z = Math.PI / 2;
+            guitarGroup.add(tunerButtonR);
+        }
+
+        // ===== STRINGS =====
+        const gtStringMat = new THREE.MeshStandardMaterial({ color: 0xc8a060, roughness: 0.25, metalness: 0.6 });
+        for (let i = 0; i < 6; i++) {
+            const stringX = -0.011 + i * 0.0044;
+            const gtString = createCylinder(0.0008, 0.0008, 0.98, 4, gtStringMat, stringX, 0.59, bodyDepth/2 + 0.012);
+            guitarGroup.add(gtString);
+        }
+
+        // Position guitar on floor, leaning against corner
+        guitarGroup.position.set(-4.5, 0.02, -4.8);
+        guitarGroup.rotation.z = 0.10;
+        guitarGroup.rotation.y = 0.35;
+        room.add(guitarGroup);
+        
+        // ==================== FAN (Realistic Pedestal Fan) ====================
+
+        const fanGroup = new THREE.Group();
+
+        // Materials
+        const fanPlasticBlack = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.6, metalness: 0.1 });
+        const fanPlasticGray = new THREE.MeshStandardMaterial({ color: 0x3a3a3a, roughness: 0.5, metalness: 0.1 });
+        const cageWireMat = new THREE.MeshStandardMaterial({ color: 0x252525, roughness: 0.4, metalness: 0.3 });
+
+        // Base - circular weighted base with ridges
+        const fanBase = createCylinder(0.28, 0.32, 0.06, 24, fanPlasticBlack, 0, 0.03, 0);
+        fanGroup.add(fanBase);
+
+        // Base top ring (decorative)
+        const baseRing = new THREE.Mesh(
+            new THREE.TorusGeometry(0.30, 0.015, 8, 32),
+            fanPlasticGray
+        );
+        baseRing.position.set(0, 0.06, 0);
+        baseRing.rotation.x = Math.PI / 2;
+        fanGroup.add(baseRing);
+
+        // Base center cap
+        const fanBaseCap = createCylinder(0.08, 0.08, 0.025, 16, fanPlasticGray, 0, 0.07, 0);
+        fanGroup.add(fanBaseCap);
+
+        // Pole - main telescopic pole (lower section)
+        const fanPoleLower = createCylinder(0.035, 0.038, 0.55, 16, fanPlasticBlack, 0, 0.35, 0);
+        fanGroup.add(fanPoleLower);
+
+        // Pole collar (adjustment ring)
+        const poleCollar = createCylinder(0.045, 0.045, 0.04, 16, fanPlasticGray, 0, 0.62, 0);
+        fanGroup.add(poleCollar);
+
+        // Pole - upper section (thinner)
+        const fanPoleUpper = createCylinder(0.028, 0.032, 0.45, 16, fanPlasticBlack, 0, 0.88, 0);
+        fanGroup.add(fanPoleUpper);
+
+        // Tilt adjustment joint
+        const fanTiltJoint = new THREE.Mesh(
+            new THREE.SphereGeometry(0.045, 16, 12),
+            fanPlasticGray
+        );
+        fanTiltJoint.position.set(0, 1.12, 0.02);
+        fanTiltJoint.scale.set(1, 0.8, 1);
+        fanGroup.add(fanTiltJoint);
+
+        // Motor housing - cylindrical with rounded edges
+        const motorMain = createCylinder(0.10, 0.10, 0.14, 20, fanPlasticBlack, 0, 1.18, 0.12);
+        motorMain.rotation.x = Math.PI / 2;
+        fanGroup.add(motorMain);
+
+        // Motor front cap (dome)
+        const motorFrontCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.10, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2),
+            fanPlasticBlack
+        );
+        motorFrontCap.position.set(0, 1.18, 0.19);
+        fanGroup.add(motorFrontCap);
+
+        // Motor back cap
+        const motorBackCap = new THREE.Mesh(
+            new THREE.SphereGeometry(0.08, 16, 10, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2),
+            fanPlasticBlack
+        );
+        motorBackCap.position.set(0, 1.18, 0.05);
+        motorBackCap.rotation.x = Math.PI;
+        fanGroup.add(motorBackCap);
+
+        // ===== Fan Cage - Concentric wire circles =====
+        const cageZFront = 0.30;
+        const cageZBack = 0.08;
+        const cageCenter = (cageZFront + cageZBack) / 2;
+        const cageDepth = cageZFront - cageZBack;
+
+        // Outer cage ring (front)
+        const cageOuterFront = new THREE.Mesh(
+            new THREE.TorusGeometry(0.34, 0.008, 8, 48),
+            cageWireMat
+        );
+        cageOuterFront.position.set(0, 1.18, cageZFront);
+        fanGroup.add(cageOuterFront);
+
+        // Outer cage ring (back)
+        const cageOuterBack = new THREE.Mesh(
+            new THREE.TorusGeometry(0.32, 0.008, 8, 48),
+            cageWireMat
+        );
+        cageOuterBack.position.set(0, 1.18, cageZBack);
+        fanGroup.add(cageOuterBack);
+
+        // Concentric wire circles on front cage (like real fan)
+        const concentricRadii = [0.28, 0.22, 0.16, 0.10];
+        concentricRadii.forEach(radius => {
+            const ring = new THREE.Mesh(
+                new THREE.TorusGeometry(radius, 0.004, 6, 36),
+                cageWireMat
+            );
+            ring.position.set(0, 1.18, cageZFront - 0.005);
+            fanGroup.add(ring);
+        });
+
+        // Radial support wires (connecting front to back)
+        for (let i = 0; i < 16; i++) {
+            const angle = (i / 16) * Math.PI * 2;
+            const wire = createCylinder(0.004, 0.004, cageDepth + 0.02, 6, cageWireMat,
+                Math.cos(angle) * 0.33, 1.18 + Math.sin(angle) * 0.33, cageCenter);
+            wire.rotation.x = Math.PI / 2;
+            fanGroup.add(wire);
+        }
+
+        // Cross support wires on back cage (spiral pattern)
+        for (let i = 0; i < 12; i++) {
+            const angle = (i / 12) * Math.PI * 2;
+            const wire = createCylinder(0.003, 0.003, 0.30, 6, cageWireMat,
+                0, 1.18, cageZBack + 0.005);
+            wire.rotation.z = angle;
+            wire.position.x = Math.cos(angle) * 0.16;
+            wire.position.y = 1.18 + Math.sin(angle) * 0.16;
+            fanGroup.add(wire);
+        }
+
+        // ===== Fan Blades (3 blades, curved shape) =====
+        const bladeMat = new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a,
+            side: THREE.DoubleSide,
+            roughness: 0.5,
+            metalness: 0.1
+        });
+
+        for (let i = 0; i < 3; i++) {
+            const angle = (i / 3) * Math.PI * 2;
+
+            // Create curved blade shape
+            const bladeShape = new THREE.Shape();
+            bladeShape.moveTo(0, -0.035);
+            bladeShape.quadraticCurveTo(0.12, -0.04, 0.24, -0.02);
+            bladeShape.lineTo(0.26, 0.02);
+            bladeShape.quadraticCurveTo(0.12, 0.045, 0, 0.035);
+            bladeShape.lineTo(0, -0.035);
+
+            const bladeGeo = new THREE.ShapeGeometry(bladeShape);
+            const blade = new THREE.Mesh(bladeGeo, bladeMat);
+
+            // Position and rotate blade
+            blade.position.set(
+                Math.cos(angle) * 0.04,
+                1.18 + Math.sin(angle) * 0.04,
+                0.20
+            );
+            blade.rotation.z = angle;
+            blade.rotation.y = 0.35; // Pitch angle
+            blade.rotation.x = -0.1;
+            fanGroup.add(blade);
+        }
+
+        // Center hub/spinner
+        const hubBack = createCylinder(0.055, 0.055, 0.03, 16, fanPlasticBlack, 0, 1.18, 0.20);
+        hubBack.rotation.x = Math.PI / 2;
+        fanGroup.add(hubBack);
+
+        // Hub front cap (rounded)
+        const hubFront = new THREE.Mesh(
+            new THREE.SphereGeometry(0.045, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2),
+            fanPlasticGray
+        );
+        hubFront.position.set(0, 1.18, 0.23);
+        fanGroup.add(hubFront);
+
+        // Hub logo/brand circle
+        const hubLogo = new THREE.Mesh(
+            new THREE.CircleGeometry(0.025, 20),
+            new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.3 })
+        );
+        hubLogo.position.set(0, 1.18, 0.275);
+        fanGroup.add(hubLogo);
+
+        // ===== Control panel on motor housing top =====
+        const controlPanel = createBox(0.06, 0.015, 0.08, fanPlasticGray, 0, 1.29, 0.12);
+        fanGroup.add(controlPanel);
+
+        // Speed control buttons (3 buttons)
+        const buttonMat = new THREE.MeshStandardMaterial({ color: 0x4a4a4a, roughness: 0.4 });
+        for (let i = 0; i < 3; i++) {
+            const button = createCylinder(0.012, 0.012, 0.008, 12, buttonMat, -0.02 + i * 0.02, 1.30, 0.12);
+            fanGroup.add(button);
+        }
+
+        // Oscillation knob on back
+        const oscKnob = createCylinder(0.018, 0.018, 0.025, 12, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.4
+        }), 0, 1.18, 0.02);
+        oscKnob.rotation.x = Math.PI / 2;
+        fanGroup.add(oscKnob);
+
+        // Oscillation knob grip lines
+        for (let i = 0; i < 8; i++) {
+            const angle = (i / 8) * Math.PI * 2;
+            const grip = createBox(0.002, 0.003, 0.02, fanPlasticBlack,
+                Math.cos(angle) * 0.015, 1.18 + Math.sin(angle) * 0.015, 0.01);
+            grip.rotation.x = Math.PI / 2;
+            fanGroup.add(grip);
+        }
+
+        // Scale up fan and position it
+        fanGroup.scale.set(1.6, 1.6, 1.6); // Scale up to be more realistic size
+        fanGroup.position.set(-4.5, 0, -1.5);
+        fanGroup.rotation.y = 0.5; // Angled toward room
+        room.add(fanGroup);
+        
+        // ==================== CHAIR (Simple office chair like in photo) ====================
+
+        const chairGroup = new THREE.Group();
+
+        // Improved gray fabric material
+        const chairFabric = new THREE.MeshStandardMaterial({
+            color: 0x6b6b72,
+            roughness: 0.85,
+            metalness: 0
+        });
+
+        // Seat cushion - rounded edges using multiple boxes
+        const seatBase = createBox(0.48, 0.08, 0.46, chairFabric, 0, 0.92, 0.02);
+        chairGroup.add(seatBase);
+
+        // Seat cushion top padding
+        const seatPadding = createBox(0.44, 0.04, 0.42, chairFabric, 0, 0.97, 0.02);
+        chairGroup.add(seatPadding);
+
+        // Seat front curve (rounded front edge)
+        const seatFront = createCylinder(0.04, 0.04, 0.44, 12, chairFabric, 0, 0.92, 0.24);
+        seatFront.rotation.z = Math.PI / 2;
+        chairGroup.add(seatFront);
+
+        // Backrest - curved shape
+        const backrestMain = createBox(0.44, 0.52, 0.06, chairFabric, 0, 1.38, -0.2);
+        backrestMain.rotation.x = 0.12;
+        chairGroup.add(backrestMain);
+
+        // Backrest curve/bolster at lumbar area
+        const backrestCurve = createBox(0.42, 0.18, 0.08, chairFabric, 0, 1.2, -0.17);
+        backrestCurve.rotation.x = 0.12;
+        chairGroup.add(backrestCurve);
+
+        // Backrest top curve
+        const backrestTop = createCylinder(0.03, 0.03, 0.42, 10, chairFabric, 0, 1.65, -0.22);
+        backrestTop.rotation.z = Math.PI / 2;
+        backrestTop.rotation.y = 0.12;
+        chairGroup.add(backrestTop);
+
+        // Plastic back shell (dark gray)
+        const backShell = createBox(0.46, 0.54, 0.025, new THREE.MeshStandardMaterial({
+            color: 0x3a3a3e, roughness: 0.5, metalness: 0.1
+        }), 0, 1.38, -0.24);
+        backShell.rotation.x = 0.12;
+        chairGroup.add(backShell);
+
+        // Mechanism/seat plate under cushion
+        const seatPlate = createBox(0.35, 0.04, 0.35, mats.chairMetal, 0, 0.85, 0);
+        chairGroup.add(seatPlate);
+
+        // Gas lift cylinder (chrome)
+        const gasLiftOuter = createCylinder(0.035, 0.04, 0.08, 12, new THREE.MeshStandardMaterial({
+            color: 0x888888, roughness: 0.2, metalness: 0.8
+        }), 0, 0.79, 0);
+        chairGroup.add(gasLiftOuter);
+
+        const gasLiftInner = createCylinder(0.025, 0.025, 0.35, 12, new THREE.MeshStandardMaterial({
+            color: 0x2a2a2a, roughness: 0.4, metalness: 0.6
+        }), 0, 0.58, 0);
+        chairGroup.add(gasLiftInner);
+
+        // Base hub (black plastic)
+        const baseHub = createCylinder(0.06, 0.07, 0.08, 16, new THREE.MeshStandardMaterial({
+            color: 0x252525, roughness: 0.6
+        }), 0, 0.38, 0);
+        chairGroup.add(baseHub);
+
+        // 5-star base with casters (black plastic/nylon)
+        const baseMat = new THREE.MeshStandardMaterial({ color: 0x1a1a1a, roughness: 0.5, metalness: 0.1 });
+
+        for (let i = 0; i < 5; i++) {
+            const angle = (i / 5) * Math.PI * 2;
+            const legLength = 0.32;
+
+            // Leg (tapered)
+            const legGeo = new THREE.CylinderGeometry(0.018, 0.022, legLength, 8);
+            const leg = new THREE.Mesh(legGeo, baseMat);
+            leg.position.set(Math.sin(angle) * legLength / 2, 0.34, Math.cos(angle) * legLength / 2);
+            leg.rotation.z = Math.PI / 2;
+            leg.rotation.y = angle;
+            chairGroup.add(leg);
+
+            // Caster fork
+            const casterFork = createCylinder(0.018, 0.02, 0.06, 8, baseMat,
+                Math.sin(angle) * legLength, 0.30, Math.cos(angle) * legLength);
+            chairGroup.add(casterFork);
+
+            // Wheel (dual wheel caster style)
+            const wheelMat = new THREE.MeshStandardMaterial({ color: 0x2a2a2a, roughness: 0.4 });
+
+            // Left wheel
+            const wheel1 = new THREE.Mesh(
+                new THREE.TorusGeometry(0.025, 0.012, 8, 14),
+                wheelMat
+            );
+            wheel1.position.set(
+                Math.sin(angle) * legLength - Math.cos(angle) * 0.015,
+                0.025,
+                Math.cos(angle) * legLength + Math.sin(angle) * 0.015
+            );
+            wheel1.rotation.y = angle;
+            chairGroup.add(wheel1);
+
+            // Right wheel
+            const wheel2 = new THREE.Mesh(
+                new THREE.TorusGeometry(0.025, 0.012, 8, 14),
+                wheelMat
+            );
+            wheel2.position.set(
+                Math.sin(angle) * legLength + Math.cos(angle) * 0.015,
+                0.025,
+                Math.cos(angle) * legLength - Math.sin(angle) * 0.015
+            );
+            wheel2.rotation.y = angle;
+            chairGroup.add(wheel2);
+        }
+
+        // No armrests (matches photo - simple office chair without arms)
+
+        chairGroup.position.set(1.5, 0, -2.2);
+        chairGroup.rotation.y = Math.PI + 0.15;
+        room.add(chairGroup);
+        
+        // ==================== DUMBBELLS (Rack with adjustable weights like in photo) ====================
+
+        const dumbbellsGroup = new THREE.Group();
+
+        // Dumbbell rack base (simple A-frame style)
+        const rackBaseMat = new THREE.MeshStandardMaterial({
+            color: 0x1a1a1a, roughness: 0.6, metalness: 0.3
+        });
+
+        // Rack uprights
+        const rackLeft = createBox(0.04, 0.25, 0.04, rackBaseMat, -0.25, 0.125, 0);
+        const rackRight = createBox(0.04, 0.25, 0.04, rackBaseMat, 0.25, 0.125, 0);
+        dumbbellsGroup.add(rackLeft, rackRight);
+
+        // Rack crossbars
+        const rackBar1 = createBox(0.54, 0.03, 0.04, rackBaseMat, 0, 0.08, 0);
+        const rackBar2 = createBox(0.54, 0.03, 0.04, rackBaseMat, 0, 0.2, 0);
+        dumbbellsGroup.add(rackBar1, rackBar2);
+
+        // Create adjustable dumbbells (2 rows)
+        const weightSizes = [
+            { outer: 0.07, inner: 0.055, redOuter: 0.065, y: 0.085 },
+            { outer: 0.065, inner: 0.05, redOuter: 0.06, y: 0.21 },
+        ];
+
+        weightSizes.forEach((size, row) => {
+            for (let col = 0; col < 2; col++) {
+                const db = new THREE.Group();
+
+                // Grip (rubberized handle)
+                const grip = createCylinder(0.02, 0.02, 0.12, 12, new THREE.MeshStandardMaterial({
+                    color: 0x2a2a2a, roughness: 0.7
+                }), 0, 0, 0);
+                grip.rotation.z = Math.PI / 2;
+                db.add(grip);
+
+                // Handle knurling texture (simple rings)
+                for (let k = 0; k < 5; k++) {
+                    const knurl = new THREE.Mesh(
+                        new THREE.TorusGeometry(0.022, 0.002, 6, 12),
+                        new THREE.MeshStandardMaterial({ color: 0x3a3a3a })
+                    );
+                    knurl.position.set(-0.04 + k * 0.02, 0, 0);
+                    knurl.rotation.y = Math.PI / 2;
+                    db.add(knurl);
+                }
+
+                // Left weight assembly
+                // Inner black plate
+                const plateL1 = createCylinder(size.inner, size.inner, 0.025, 14, mats.weightBlack, -0.08, 0, 0);
+                plateL1.rotation.z = Math.PI / 2;
+                db.add(plateL1);
+
+                // Red outer plate
+                const plateL2 = createCylinder(size.redOuter, size.redOuter, 0.035, 14, mats.weightRed, -0.115, 0, 0);
+                plateL2.rotation.z = Math.PI / 2;
+                db.add(plateL2);
+
+                // Outer black plate
+                const plateL3 = createCylinder(size.outer, size.outer, 0.03, 14, mats.weightBlack, -0.15, 0, 0);
+                plateL3.rotation.z = Math.PI / 2;
+                db.add(plateL3);
+
+                // End cap
+                const capL = createCylinder(0.025, 0.025, 0.02, 10, new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a, roughness: 0.4
+                }), -0.17, 0, 0);
+                capL.rotation.z = Math.PI / 2;
+                db.add(capL);
+
+                // Right weight assembly (mirror)
+                const plateR1 = createCylinder(size.inner, size.inner, 0.025, 14, mats.weightBlack, 0.08, 0, 0);
+                plateR1.rotation.z = Math.PI / 2;
+                db.add(plateR1);
+
+                const plateR2 = createCylinder(size.redOuter, size.redOuter, 0.035, 14, mats.weightRed, 0.115, 0, 0);
+                plateR2.rotation.z = Math.PI / 2;
+                db.add(plateR2);
+
+                const plateR3 = createCylinder(size.outer, size.outer, 0.03, 14, mats.weightBlack, 0.15, 0, 0);
+                plateR3.rotation.z = Math.PI / 2;
+                db.add(plateR3);
+
+                const capR = createCylinder(0.025, 0.025, 0.02, 10, new THREE.MeshStandardMaterial({
+                    color: 0x1a1a1a, roughness: 0.4
+                }), 0.17, 0, 0);
+                capR.rotation.z = Math.PI / 2;
+                db.add(capR);
+
+                db.position.set(col * 0.38 - 0.19, size.y, 0);
+                dumbbellsGroup.add(db);
+            }
+        });
+
+        dumbbellsGroup.position.set(3.0, 0, -3.0);
+        dumbbellsGroup.rotation.y = -0.2;
+        room.add(dumbbellsGroup);
+        
+        // ==================== ADD ROOM TO SCENE ====================
+        
+        scene.add(room);
+        
+        // ==================== LIGHTING ====================
+        
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
+        scene.add(ambientLight);
+        
+        const mainLight = new THREE.DirectionalLight(0xfff5e6, 0.9);
+        mainLight.position.set(5, 12, 8);
+        mainLight.castShadow = true;
+        mainLight.shadow.mapSize.width = 2048;
+        mainLight.shadow.mapSize.height = 2048;
+        mainLight.shadow.camera.near = 0.5;
+        mainLight.shadow.camera.far = 50;
+        mainLight.shadow.camera.left = -15;
+        mainLight.shadow.camera.right = 15;
+        mainLight.shadow.camera.top = 15;
+        mainLight.shadow.camera.bottom = -15;
+        mainLight.shadow.bias = -0.0001;
+        scene.add(mainLight);
+        
+        // Fill light
+        const fillLight = new THREE.DirectionalLight(0xe6f0ff, 0.3);
+        fillLight.position.set(-5, 8, 5);
+        scene.add(fillLight);
+        
+        // PC RGB lights
+        const pcRgbLight1 = new THREE.PointLight(0x00ffff, 0.6, 2.5);
+        pcRgbLight1.position.set(3.2, 2.2, -4.2);
+        scene.add(pcRgbLight1);
+        
+        const pcRgbLight2 = new THREE.PointLight(0xff00ff, 0.4, 2);
+        pcRgbLight2.position.set(3.2, 1.8, -4.2);
+        scene.add(pcRgbLight2);
+        
+        // Monitor glow
+        const screenGlow = new THREE.PointLight(0x6600aa, 0.5, 2.5);
+        screenGlow.position.set(1.5, 2.2, -4);
+        scene.add(screenGlow);
+        
+        // Lamp light
+        const lampLight = new THREE.PointLight(0xffffcc, 0.3, 1.5);
+        lampLight.position.set(3.3, 2.4, -4.5);
+        scene.add(lampLight);
+        
+        // ==================== THEME TOGGLE ====================
+        
+        let isNightMode = true;
+        const themeToggle = document.getElementById('themeToggle');
+        
+        function setDayMode() {
+            ambientLight.intensity = 0.7;
+            mainLight.intensity = 1.3;
+            fillLight.intensity = 0.5;
+            pcRgbLight1.intensity = 0.2;
+            pcRgbLight2.intensity = 0.15;
+            screenGlow.intensity = 0.2;
+            lampLight.intensity = 0.1;
+            renderer.toneMappingExposure = 1.6;
+            document.body.style.background = 'linear-gradient(135deg, #87CEEB 0%, #E0F6FF 100%)';
+            themeToggle.textContent = '🌙 Modo Noche';
+        }
+        
+        function setNightMode() {
+            ambientLight.intensity = 0.35;
+            mainLight.intensity = 0.9;
+            fillLight.intensity = 0.3;
+            pcRgbLight1.intensity = 0.6;
+            pcRgbLight2.intensity = 0.4;
+            screenGlow.intensity = 0.5;
+            lampLight.intensity = 0.3;
+            renderer.toneMappingExposure = 1.2;
+            document.body.style.background = 'linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%)';
+            themeToggle.textContent = '☀️ Modo Día';
+        }
+        
+        themeToggle.addEventListener('click', () => {
+            isNightMode = !isNightMode;
+            isNightMode ? setNightMode() : setDayMode();
+        });
+        
+        // ==================== ANIMATION ====================
+        
+        let time = 0;
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            time += 0.025;
+            
+            // Animate RGB fans
+            rgbFans.forEach((fan, i) => {
+                const hue = (time * 0.4 + i * 0.15) % 1;
+                fan.material.color.setHSL(hue, 1, 0.55);
+            });
+            
+            // Animate RGB strip in PC
+            rgbStrip.material.color.setHSL((time * 0.3 + 0.5) % 1, 1, 0.5);
+            
+            // Animate PC lights
+            pcRgbLight1.color.setHSL((time * 0.25) % 1, 1, 0.5);
+            pcRgbLight2.color.setHSL((time * 0.25 + 0.5) % 1, 1, 0.5);
+            
+            // Keyboard RGB layer animation
+            kbRgbLayer.material.color.setHSL((time * 0.15) % 1, 1, 0.5);
+            
+            // Subtle screen flicker
+            screenGlow.intensity = 0.45 + Math.sin(time * 2) * 0.08;
+            
+            controls.update();
+            renderer.render(scene, camera);
+        }
+        
+        // ==================== RESIZE HANDLER ====================
+        
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+        
+        // Hide loading
+        setTimeout(() => {
+            document.getElementById('loading').classList.add('hidden');
+        }, 1200);
+        
+        animate();
+    </script>
+</body>
+</html>
