@@ -25,7 +25,7 @@ ROOM.layout = {
 
     // Blue desk against the back wall, starting just right of the bookshelf
     desk: {
-        minX: -0.945, maxX: 0.82, minZ: -1.6, maxZ: -0.8,
+        minX: -0.945, maxX: 0.845, minZ: -1.6, maxZ: -0.8,
         topY: 0.76,                      // height of the top surface
         topThickness: 0.035
     },
