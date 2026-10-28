@@ -261,11 +261,28 @@
 
     // ---------- camera presets ----------
 
+    // Presets are authored for the photo's 3:4 frame. On narrower screens (phones in portrait)
+    // widen the vertical field of view so the same horizontal extent stays visible.
+    const PRESET_ASPECT = 765 / 1024;
+    let activeView = null;
+
+    function fitFov() {
+        if (!activeView) return;
+        const base = activeView.fov || 58;
+        if (camera.aspect >= PRESET_ASPECT) {
+            camera.fov = base;
+        } else {
+            const halfH = Math.atan(Math.tan(THREE.MathUtils.degToRad(base / 2)) * PRESET_ASPECT / camera.aspect);
+            camera.fov = Math.min(85, THREE.MathUtils.radToDeg(2 * halfH));
+        }
+        camera.updateProjectionMatrix();
+    }
+
     ROOM.setView = function (name) {
         const v = (ROOM.layout.views || {})[name];
         if (!v) return false;
-        camera.fov = v.fov || 58;
-        camera.updateProjectionMatrix();
+        activeView = v;
+        fitFov();
         camera.position.set(...v.position);
         controls.target.set(...v.target);
         controls.update();
@@ -314,6 +331,7 @@
 
     window.addEventListener('resize', () => {
         camera.aspect = window.innerWidth / window.innerHeight;
+        fitFov();
         camera.updateProjectionMatrix();
         renderer.setSize(window.innerWidth, window.innerHeight);
     });

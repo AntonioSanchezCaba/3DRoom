@@ -9,7 +9,7 @@ ROOM.layout = {
     room: {
         minX: -1.8, maxX: 2.0,      // left wall inner face at minX; the right side is open
         minZ: -1.6, maxZ: 1.6,      // back wall inner face at minZ; the front side is open
-        height: 2.7,
+        height: 3.0,
         wallThickness: 0.1,
         outlet: { x: -0.23, y: 1.73 },                       // duplex outlet on the back wall, two black plugs
         board: { minX: -0.04, maxX: 0.5, minY: 1.41, maxY: 1.95 }, // plain cream poster board on the back wall
