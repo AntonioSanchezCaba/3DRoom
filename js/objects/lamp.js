@@ -10,25 +10,59 @@ ROOM.register('lamp', (ctx) => {
     const B = V(A.base.x, top, A.base.z);                 // base centre on the desk
 
     // ---------- materials ----------
-    // Tiny fake environment (warm room, blue desk below, dark PC/monitors behind) so the metal
-    // reads as polished silver even though the scene has no environment map.
-    const face = (draw) => { const c = document.createElement('canvas'); c.width = c.height = 64; draw(c.getContext('2d'), 64); return c; };
-    const vgrad = (g, s, stops) => { const gr = g.createLinearGradient(0, 0, 0, s); stops.forEach(([t, col]) => gr.addColorStop(t, col)); g.fillStyle = gr; g.fillRect(0, 0, s, s); };
-    const blob = (g, x, y, r, col) => { const gr = g.createRadialGradient(x, y, 0, x, y, r); gr.addColorStop(0, col); gr.addColorStop(1, 'rgba(0,0,0,0)'); g.fillStyle = gr; g.fillRect(0, 0, 64, 64); };
-    const wall = (lit, dark) => (g, s) => vgrad(g, s, [[0, lit], [0.55, lit], [0.75, dark], [1, dark]]);
-    const env = new THREE.CubeTexture([
-        face((g, s) => { wall('#a88c68', '#3a3a40')(g, s); blob(g, 30, 18, 26, 'rgba(255,232,200,0.5)'); blob(g, 20, 46, 12, 'rgba(225,220,235,0.55)'); }),     // +x: lit right wall
-        face((g, s) => { wall('#7a6040', '#2a2a30')(g, s); blob(g, 20, 40, 18, 'rgba(110,80,50,0.6)'); }),       // -x: bookshelf side
-        face((g, s) => { g.fillStyle = '#6e5c44'; g.fillRect(0, 0, s, s); blob(g, 34, 46, 20, 'rgba(255,238,205,1)'); }), // +y: ceiling + light
-        face((g, s) => { g.fillStyle = '#2c3446'; g.fillRect(0, 0, s, s); blob(g, 32, 32, 30, 'rgba(70,80,100,0.7)'); }),  // -y: blue desk
-        face((g, s) => { vgrad(g, s, [[0, '#c4ac88'], [0.5, '#a8957a'], [0.8, '#56504a'], [1, '#34363e']]); blob(g, 26, 8, 22, 'rgba(255,240,222,0.8)'); blob(g, 46, 44, 14, 'rgba(235,228,240,0.6)'); }), // +z: room / photographer side
-        face((g, s) => { g.fillStyle = '#1c1a20'; g.fillRect(0, 0, s, s); blob(g, 44, 26, 14, 'rgba(140,80,180,0.45)'); blob(g, 18, 22, 16, 'rgba(70,80,150,0.35)'); }) // -z: PC + monitors
-    ]);
-    env.needsUpdate = true;
+    // Small procedural environment cube (warm lit room, blue desk below, dark PC/monitors behind)
+    // so the metal reads as satin silver even though the scene has no environment map. Every texel
+    // is computed from its world direction, so there are no seams between faces. The bright lobe is
+    // the near-white highlight the shade shows in the photo (directions measured by ray-casting the
+    // photo camera onto the shade). NB: three.js mirrors x when it samples a CubeTexture env map.
+    const ES = 64;
+    const clamp01 = (x) => Math.min(1, Math.max(0, x));
+    const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+    const mix3 = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+    const nrm3 = (x, y, z) => { const l = Math.hypot(x, y, z); return [x / l, y / l, z / l]; };
+    const lobes = [                                        // [direction, angular width (rad), colour]
+        [nrm3(0.8, -0.1, 0.58), 0.2, [0.95, 0.93, 1.0]],   // bright highlight (open, lit side of the room)
+        [nrm3(0.8, -0.1, 0.58), 0.5, [0.26, 0.25, 0.3]],   // its soft halo
+        [nrm3(-0.3, 0.5, 0.8), 0.3, [0.42, 0.37, 0.28]],   // light upper front (the photographer side)
+        [[0, 1, 0.15], 0.5, [0.55, 0.48, 0.36]],           // overhead light
+        [nrm3(-0.25, 0.05, -1), 0.45, [0.14, 0.08, 0.22]]  // RGB / monitor glow behind
+    ];
+    const envColor = (d, tint, hi, dn) => {
+        const e = d[1];
+        const wl = Math.max(0, -d[0]), wr = Math.max(0, d[0]), wf = Math.max(0, d[2]), wb = Math.max(0, -d[2]), ws = wl + wr + wf + wb + 1e-6;
+        const back = mix3([0.08, 0.075, 0.09], [0.46, 0.39, 0.28], smooth(0.0, 0.3, e));   // PC/monitors below, lit wall above
+        const L = [0.56, 0.46, 0.31], Rr = [0.33, 0.3, 0.29], F = [0.42, 0.355, 0.245];
+        let c = [0, 1, 2].map(i => (wl * L[i] + wr * Rr[i] + wf * F[i] + wb * back[i]) / ws);
+        c = e > 0 ? mix3(c, [0.46, 0.39, 0.28], smooth(0.35, 0.95, e)) : mix3(c, dn[0], smooth(dn[1], dn[2], -e));
+        c = [c[0] * tint[0], c[1] * tint[1], c[2] * tint[2]];
+        lobes.forEach(([dir, w, col], li) => {
+            const a = Math.acos(Math.min(1, d[0] * dir[0] + d[1] * dir[1] + d[2] * dir[2])), k = Math.exp(-(a / w) * (a / w)) * (li < 2 ? hi : 1);
+            c = [c[0] + col[0] * k, c[1] + col[1] * k, c[2] + col[2] * k];
+        });
+        return c;
+    };
+    // GL cube-face texel -> lookup direction (s,t in -1..1, t down), then un-mirror x to world
+    const faceDir = [(s, t) => [1, -t, -s], (s, t) => [-1, -t, s], (s, t) => [s, 1, t], (s, t) => [s, -1, -t], (s, t) => [s, -t, 1], (s, t) => [-s, -t, -1]];
+    const makeEnv = (tint, hi, dn) => { const env = new THREE.CubeTexture(faceDir.map(fd => {
+        const cv = document.createElement('canvas'); cv.width = cv.height = ES;
+        const g = cv.getContext('2d'), img = g.createImageData(ES, ES);
+        for (let y = 0; y < ES; y++) for (let x = 0; x < ES; x++) {
+            const l = fd(2 * (x + 0.5) / ES - 1, 2 * (y + 0.5) / ES - 1);
+            const c = envColor(nrm3(-l[0], l[1], l[2]), tint, hi, dn), i = 4 * (y * ES + x);
+            img.data[i] = Math.round(clamp01(c[0]) * 255); img.data[i + 1] = Math.round(clamp01(c[1]) * 255);
+            img.data[i + 2] = Math.round(clamp01(c[2]) * 255); img.data[i + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+        return cv;
+    })); env.needsUpdate = true; return env; };
+    const env = makeEnv([1, 1, 1], 1, [[0.1, 0.12, 0.18], 0.1, 0.6]);
+    // the shade is a near-neutral silver: the warm golden mid-tones come from the tungsten-lit room,
+    // so its environment is warmer and darker with a near-white highlight on top
+    const envShade = makeEnv([0.66, 0.58, 0.43], 0.95, [[0.15, 0.18, 0.25], 0.3, 0.95]);
 
-    const silver = mat(0xdcd0ba, { metalness: 0.78, roughness: 0.25, envMap: env, envMapIntensity: 1.0 });
-    const satin = mat(0xc8b89e, { metalness: 0.8, roughness: 0.4, envMap: env, envMapIntensity: 0.95 });  // base
-    const rodMat = mat(0xd4cab8, { metalness: 0.75, roughness: 0.34, envMap: env, envMapIntensity: 1.0 });
+    const silver = mat(0xe8e2da, { metalness: 0.92, roughness: 0.15, envMap: envShade, envMapIntensity: 1.7 });
+    const satin = mat(0xd8c6ac, { metalness: 0.9, roughness: 0.22, envMap: env, envMapIntensity: 1.25 });  // base
+    const rodMat = mat(0xdcd2c0, { metalness: 0.86, roughness: 0.3, envMap: env, envMapIntensity: 1.15 });
     const steel = mat(0xa09888, { metalness: 0.8, roughness: 0.38, envMap: env, envMapIntensity: 0.9 });   // pins, spring
     const shadeIn = mat(0xe8e0d0, { metalness: 0.35, roughness: 0.45, envMap: env, envMapIntensity: 0.6 });
     const felt = mat(0x1a1a1a, { roughness: 0.95 });
@@ -37,33 +71,32 @@ ROOM.register('lamp', (ctx) => {
 
     // Vented cap: vertical slots
     const ventTex = canvasTexture(256, 64, (g, w, h) => {
-        g.fillStyle = '#b8ae9c'; g.fillRect(0, 0, w, h);
+        g.fillStyle = '#e6e2dc'; g.fillRect(0, 0, w, h);
         for (let i = 0; i < 18; i++) {
             const x = (i + 0.5) * w / 18;
-            g.fillStyle = '#7a7064'; g.fillRect(x - 2, h * 0.28, 4, h * 0.6);
-            g.fillStyle = 'rgba(255,250,240,0.4)'; g.fillRect(x + 2, h * 0.3, 2, h * 0.56);
+            g.fillStyle = '#958a7a'; g.fillRect(x - 1.5, h * 0.28, 3, h * 0.6);
+            g.fillStyle = 'rgba(255,252,246,0.6)'; g.fillRect(x + 2, h * 0.3, 3, h * 0.56);
         }
         g.fillStyle = 'rgba(0,0,0,0.25)'; g.fillRect(0, h * 0.9, w, h * 0.1);
     });
-    const capMat = mat(0xffffff, { map: ventTex, bumpMap: ventTex, bumpScale: 0.002, metalness: 0.7, roughness: 0.34, envMap: env, envMapIntensity: 0.9 });
+    const capMat = mat(0xffffff, { map: ventTex, bumpMap: ventTex, bumpScale: 0.0012, metalness: 0.88, roughness: 0.22, envMap: envShade, envMapIntensity: 1.8 });
 
     // ---------- base ----------
-    const R = 0.09, BH = 0.027;
+    const R = 0.09, BH = 0.03, ER = 0.012;                 // radius, height, horizontal radius of the rolled edge
     const prof = [];
     prof.push(new THREE.Vector2(0.0, 0.0));
-    prof.push(new THREE.Vector2(R - 0.006, 0.0));
-    prof.push(new THREE.Vector2(R - 0.002, 0.002));
-    for (let i = 0; i <= 8; i++) {                         // rounded side
-        const a = -Math.PI / 2 + Math.PI * i / 8;
-        prof.push(new THREE.Vector2(R - 0.009 + 0.009 * Math.cos(a) * 0.95, BH / 2 + (BH / 2 - 0.001) * Math.sin(a)));
+    prof.push(new THREE.Vector2(R - ER, 0.0));
+    for (let i = 0; i <= 12; i++) {                        // rounded, slightly bulging side
+        const a = -Math.PI / 2 + Math.PI * i / 12;
+        prof.push(new THREE.Vector2(R - ER + ER * Math.cos(a), BH / 2 + (BH / 2 - 0.0008) * Math.sin(a)));
     }
-    prof.push(new THREE.Vector2(R - 0.016, BH + 0.0005));
-    prof.push(new THREE.Vector2(R - 0.024, BH + 0.0012));
-    prof.push(new THREE.Vector2(0.0, BH + 0.0016));
+    prof.push(new THREE.Vector2(R - ER - 0.008, BH + 0.0006));
+    prof.push(new THREE.Vector2(R - ER - 0.025, BH + 0.0016));   // gently domed top
+    prof.push(new THREE.Vector2(0.0, BH + 0.0024));
     const baseMesh = new THREE.Mesh(new THREE.LatheGeometry(prof, 64), satin);
     baseMesh.position.set(B.x, top + 0.0015, B.z);
     group.add(baseMesh);
-    group.add(cylinder(R - 0.008, R - 0.008, 0.0015, felt, B.x, top + 0.00075, B.z, 48));   // felt pad
+    group.add(cylinder(R - ER, R - ER, 0.0015, felt, B.x, top + 0.00075, B.z, 48));   // felt pad
     const baseTop = top + 0.0015 + BH + 0.0012;
 
     // ---------- arm plane ----------
@@ -109,7 +142,7 @@ ROOM.register('lamp', (ctx) => {
     };
     const pin = (p2, len = 0.024, r = 0.0026) => {
         group.add(tube(P(p2[0], p2[1], -len / 2), P(p2[0], p2[1], len / 2), r, steel, 10));
-        [-1, 1].forEach(s => group.add(tube(P(p2[0], p2[1], s * (len / 2 - 0.0015)), P(p2[0], p2[1], s * (len / 2 + 0.001)), r * 1.9, steel, 6)));
+        [-1, 1].forEach(s => group.add(tube(P(p2[0], p2[1], s * (len / 2 - 0.0015)), P(p2[0], p2[1], s * (len / 2 + 0.001)), r * 1.6, steel, 8)));
     };
     const rod = (a2, b2, o = 0, r = 0.0037, material = rodMat) => {
         const m = tube(P(a2[0], a2[1], o), P(b2[0], b2[1], o), r, material, 12);
@@ -128,7 +161,7 @@ ROOM.register('lamp', (ctx) => {
     group.add(cylinder(0.011, 0.013, 0.012, satin, foot.x, baseTop + 0.012, foot.z, 20));    // swivel collar
     group.add(cylinder(0.0075, 0.0075, S.y - 0.012 - baseTop - 0.012, rodMat, foot.x, (baseTop + 0.018 + S.y - 0.012) / 2, foot.z, 16));
     const sb = -0.016;                                          // fork plates (shoulder)
-    [-1, 1].forEach(s => lobePlate([[0, sb], [0, 0.0], [0.024, 0.004]], 0.0085, s * 0.0068, 0.0028, rodMat));
+    [-1, 1].forEach(s => lobePlate([[0, sb], [0, 0.0], [0.022, 0.004]], 0.007, s * 0.0068, 0.0026, rodMat));
 
     // ---------- lower arm: two parallel rods ----------
     const dL = norm2([E2[0], E2[1]]);
@@ -153,7 +186,7 @@ ROOM.register('lamp', (ctx) => {
     rod(U2a, U2b, 0, 0.0038);
 
     // elbow knuckle plates (sandwich the rod ends)
-    [-1, 1].forEach(s => lobePlate([E2, L2b, U2a], 0.0075, s * 0.0068, 0.0028, rodMat));
+    [-1, 1].forEach(s => lobePlate([E2, L2b, U2a], 0.0062, s * 0.0068, 0.0026, rodMat));
     pin(E2); pin(L2b); pin(U2a);
 
     // head bracket: triangular plates with the neck rod from the apex
@@ -190,7 +223,7 @@ ROOM.register('lamp', (ctx) => {
 
     // ---------- head: cap + bell shade ----------
     const D = V(-0.3, -0.94, -0.05).normalize();            // shade axis, out of the mouth (down-left)
-    const neckLen = 0.04, capR = 0.035, capLen = 0.085;
+    const neckLen = 0.04, capR = 0.031, capLen = 0.085, capTopR = capR * 0.8;
     const neckDir = norm2(add2(dU, pU, 0.22));
     const neckEnd = P(Hapex[0] + neckDir[0] * neckLen, Hapex[1] + neckDir[1] * neckLen);
     group.add(tube(P(Hapex[0], Hapex[1]), neckEnd, 0.0042, rodMat, 12));
@@ -201,11 +234,11 @@ ROOM.register('lamp', (ctx) => {
     head.position.copy(C); head.quaternion.copy(q);
     group.add(head);
     // local frame of head: -y = out of the mouth, origin = cap centre
-    const capMesh = new THREE.Mesh(new THREE.CylinderGeometry(capR * 0.94, capR, capLen, 40, 1, true), capMat);
+    const capMesh = new THREE.Mesh(new THREE.CylinderGeometry(capTopR, capR, capLen, 40, 1, true), capMat);
     head.add(capMesh);
-    const capTop = new THREE.Mesh(new THREE.SphereGeometry(capR * 0.94, 32, 8, 0, Math.PI * 2, 0, Math.PI / 2), silver);
-    capTop.scale.set(1, 0.4, 1); capTop.position.y = capLen / 2; head.add(capTop);
-    const lip = new THREE.Mesh(new THREE.TorusGeometry(capR * 0.95, 0.0018, 6, 40), silver);
+    const capTop = new THREE.Mesh(new THREE.SphereGeometry(capTopR, 32, 8, 0, Math.PI * 2, 0, Math.PI / 2), silver);
+    capTop.scale.set(1, 0.45, 1); capTop.position.y = capLen / 2; head.add(capTop);
+    const lip = new THREE.Mesh(new THREE.TorusGeometry(capTopR * 1.01, 0.0018, 6, 40), silver);
     lip.rotation.x = Math.PI / 2; lip.position.y = capLen / 2; head.add(lip);
     // switch knob on top
     const knob = new THREE.Mesh(new THREE.CylinderGeometry(0.0028, 0.0034, 0.02, 10), cableMat);
@@ -216,10 +249,14 @@ ROOM.register('lamp', (ctx) => {
     // bell: smooth dome flaring to a rolled rim
     const mouthR = 0.093, bellD = 0.11, y0 = -capLen / 2 + 0.003;
     const outer = [];
-    for (let i = 0; i <= 24; i++) {
-        const th = (i / 24) * Math.PI / 2, s = Math.sin(th), c = Math.cos(th);
-        const r = capR * 0.97 + (mouthR - capR * 0.97) * (0.82 * s + 0.18 * (1 - c));
-        outer.push(new THREE.Vector2(r, y0 - bellD * (1 - Math.pow(c, 1.15))));
+    // dome shoulder that rounds over into nearly straight, slightly flared skirt (photo silhouette)
+    const r0 = capR * 1.04;
+    outer.push(new THREE.Vector2(capR * 0.96, y0 + 0.002));
+    for (let i = 0; i <= 26; i++) {
+        const t = i / 26;
+        const f = 1 - Math.pow(1 - t, 2.4);
+        const r = r0 + (mouthR - r0) * (0.9 * f + 0.1 * t * t);
+        outer.push(new THREE.Vector2(r, y0 - bellD * (0.06 * Math.sin(t * Math.PI / 2) + 0.94 * t)));
     }
     // outer profile ordered from mouth (bottom) to top so the faces point outwards
     const outerProf = outer.slice().reverse();
@@ -229,7 +266,7 @@ ROOM.register('lamp', (ctx) => {
     const bellIn = new THREE.Mesh(new THREE.LatheGeometry(inner, 56), shadeIn);
     head.add(bellIn);
     const rimY = outer[outer.length - 1].y;
-    const rim = new THREE.Mesh(new THREE.TorusGeometry(mouthR - 0.0006, 0.0021, 8, 64), silver);
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(mouthR - 0.0006, 0.0016, 8, 64), silver);
     rim.rotation.x = Math.PI / 2; rim.position.y = rimY; head.add(rim);
     // bulb + socket (lamp is off)
     const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.016, 0.016, 0.03, 16), mat(0x2a2a2a, { roughness: 0.5 }));
