@@ -40,8 +40,8 @@ ROOM.layout = {
     // Large cube gaming case on the right end of the desk; tempered-glass side faces the room (+z),
     // front panel with RGB fans faces +x, 2x2 RGB fans under the top mesh
     pc: {
-        minX: 0.27, maxX: 0.8, minZ: -1.57, maxZ: -1.08,
-        height: 0.52
+        minX: 0.195, maxX: 0.595, minZ: -1.43, maxZ: -1.1,   // fitted to the photo by the pc builder
+        height: 0.54
     },
 
     // Keyboard, mouse pad + mouse, small white box and black speaker on the desk
