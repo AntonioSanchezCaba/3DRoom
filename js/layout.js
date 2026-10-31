@@ -90,6 +90,11 @@ ROOM.layout = {
     // Camera presets. 'photo' reproduces the reference photo's viewpoint (solved from landmarks).
     views: {
         photo:    { position: [1.248, 2.598, 0.949], target: [-0.154, 1.342, -0.697], fov: 51.66 },
-        overview: { position: [3.4, 2.9, 3.4], target: [-0.4, 0.8, -0.7], fov: 50 }
+        overview: { position: [3.4, 2.9, 3.4], target: [-0.4, 0.8, -0.7], fov: 50 },
+        desk:     { position: [-0.15, 1.42, 0.25], target: [-0.18, 0.98, -1.3], fov: 52 },
+        shelf:    { position: [-0.45, 1.5, 0.45], target: [-1.4, 1.05, -1.45], fov: 50 },
+        corner:   { position: [-0.95, 1.38, 0.72], target: [-1.55, 0.68, -0.82], fov: 50 },
+        pc:       { position: [1.25, 1.5, -0.2], target: [0.4, 1.0, -1.27], fov: 48 },
+        top:      { position: [-0.4, 4.3, -0.05], target: [-0.4, 0, -0.8], fov: 50 }
     }
 };

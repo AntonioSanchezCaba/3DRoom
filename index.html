@@ -2,196 +2,131 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#07060d">
+    <meta name="description" content="Mi cuarto gamer recreado en 3D con Three.js">
     <title>My Room in 3D</title>
-    <style>
-        @import url('https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Outfit:wght@300;600&display=swap');
-        
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: 'Outfit', sans-serif;
-            overflow: hidden;
-            background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
-        }
-        
-        #canvas-container {
-            width: 100vw;
-            height: 100vh;
-            position: relative;
-        }
-        
-        canvas {
-            display: block;
-        }
-        
-        .ui-overlay {
-            position: fixed;
-            z-index: 100;
-            pointer-events: none;
-        }
-        
-        .title {
-            top: 30px;
-            left: 40px;
-            color: #fff;
-        }
-        
-        .title h1 {
-            font-family: 'Space Mono', monospace;
-            font-size: 2.5rem;
-            font-weight: 700;
-            letter-spacing: -2px;
-            background: linear-gradient(90deg, #00d9ff, #ff00e5, #00d9ff);
-            background-size: 200% auto;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            animation: gradient-shift 3s ease infinite;
-            text-shadow: 0 0 30px rgba(0, 217, 255, 0.3);
-        }
-        
-        .title p {
-            font-size: 0.9rem;
-            color: rgba(255,255,255,0.5);
-            margin-top: 5px;
-            font-weight: 300;
-        }
-        
-        @keyframes gradient-shift {
-            0% { background-position: 0% center; }
-            50% { background-position: 100% center; }
-            100% { background-position: 0% center; }
-        }
-        
-        .controls-hint {
-            bottom: 30px;
-            left: 40px;
-            color: rgba(255,255,255,0.6);
-            font-size: 0.85rem;
-        }
-        
-        .controls-hint span {
-            display: block;
-            margin-bottom: 5px;
-            font-family: 'Space Mono', monospace;
-        }
-        
-        .controls-hint span::before {
-            content: '→';
-            margin-right: 10px;
-            color: #00d9ff;
-        }
-        
-        .loading {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: #0a0a0f;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-            transition: opacity 0.8s ease, visibility 0.8s ease;
-        }
-        
-        .loading.hidden {
-            opacity: 0;
-            visibility: hidden;
-        }
-        
-        .loading-text {
-            font-family: 'Space Mono', monospace;
-            font-size: 1.2rem;
-            color: #00d9ff;
-            animation: pulse 1.5s ease-in-out infinite;
-        }
-        
-        .loading-bar {
-            width: 200px;
-            height: 3px;
-            background: rgba(255,255,255,0.1);
-            margin-top: 20px;
-            border-radius: 2px;
-            overflow: hidden;
-        }
-        
-        .loading-bar::after {
-            content: '';
-            display: block;
-            width: 40%;
-            height: 100%;
-            background: linear-gradient(90deg, #00d9ff, #ff00e5);
-            animation: loading-slide 1s ease-in-out infinite;
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        @keyframes loading-slide {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(350%); }
-        }
-        
-        .theme-toggle {
-            position: fixed;
-            bottom: 30px;
-            right: 40px;
-            z-index: 100;
-            pointer-events: auto;
-            background: rgba(255,255,255,0.1);
-            border: 1px solid rgba(255,255,255,0.2);
-            color: #fff;
-            padding: 10px 20px;
-            border-radius: 30px;
-            cursor: pointer;
-            font-family: 'Space Mono', monospace;
-            font-size: 0.8rem;
-            transition: all 0.3s ease;
-            backdrop-filter: blur(10px);
-        }
-        
-        .view-toggle {
-            top: 30px;
-            bottom: auto;
-        }
-
-        .theme-toggle:hover {
-            background: rgba(0, 217, 255, 0.2);
-            border-color: #00d9ff;
-            transform: scale(1.05);
-        }
-    </style>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=Space+Mono:wght@400;700&family=Unbounded:wght@600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/ui.css">
 </head>
 <body>
-    <div class="loading" id="loading">
-        <div class="loading-text">Cargando habitación...</div>
-        <div class="loading-bar"></div>
-    </div>
-    
-    <div class="ui-overlay title">
-        <h1>My Room in 3D</h1>
-        <p>AMC's Workspace</p>
-    </div>
-    
-    <div class="ui-overlay controls-hint">
-        <span>Arrastra para rotar</span>
-        <span>Scroll para zoom</span>
-        <span>Click derecho para mover</span>
-    </div>
-    
-    <button class="theme-toggle view-toggle" id="viewToggle">🏠 Vista general</button>
-    <button class="theme-toggle" id="themeToggle">☀️ Modo Día</button>
-    
+    <!-- Icon sprite -->
+    <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+        <defs>
+            <linearGradient id="rgb-grad" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#22e4ff"/><stop offset="0.5" stop-color="#8b5cf6"/><stop offset="1" stop-color="#ff2bd6"/>
+            </linearGradient>
+        </defs>
+        <symbol id="i-cube" viewBox="0 0 48 48"><path d="M24 4 42 14v20L24 44 6 34V14z" fill="none" stroke="url(#rgb-grad)" stroke-width="2.6" stroke-linejoin="round"/><path d="M6 14l18 10 18-10M24 24v20" fill="none" stroke="url(#rgb-grad)" stroke-width="2.6" stroke-linejoin="round"/><circle cx="24" cy="24" r="3" fill="url(#rgb-grad)"/></symbol>
+        <symbol id="i-camera" viewBox="0 0 24 24"><path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3z"/><circle cx="12" cy="13" r="3.2"/></symbol>
+        <symbol id="i-home" viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></symbol>
+        <symbol id="i-monitor" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+        <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h14v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></symbol>
+        <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></symbol>
+        <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6" rx="1"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M19 9h3M19 15h3M2 9h3M2 15h3"/></symbol>
+        <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/></symbol>
+        <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+        <symbol id="i-moon" viewBox="0 0 24 24"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+        <symbol id="i-rotate" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.6-6.4L21 8"/><path d="M21 3v5h-5"/></symbol>
+        <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+        <symbol id="i-image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-5-5L5 21"/></symbol>
+        <symbol id="i-max" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></symbol>
+        <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></symbol>
+        <symbol id="i-eye-off" viewBox="0 0 24 24"><path d="M3 3l18 18"/><path d="M10.6 5.1A10 10 0 0 1 12 5c6.5 0 10 7 10 7a17 17 0 0 1-3.2 4.1M6.6 6.6A17 17 0 0 0 2 12s3.5 7 10 7a9.7 9.7 0 0 0 5.4-1.6"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/></symbol>
+        <symbol id="i-x" viewBox="0 0 24 24"><path d="M18 6 6 18M6 6l12 12"/></symbol>
+        <symbol id="i-back" viewBox="0 0 24 24"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></symbol>
+        <symbol id="i-keys" viewBox="0 0 24 24"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10"/></symbol>
+    </svg>
+
     <div id="canvas-container"></div>
+    <div class="vignette" data-ui></div>
+
+    <!-- Loading screen -->
+    <div class="loader" id="loading" data-ui>
+        <div class="loader-inner">
+            <svg class="loader-cube"><use href="#i-cube"/></svg>
+            <div class="loader-title">MY ROOM <span>3D</span></div>
+            <div class="loader-sub">AMC's Workspace</div>
+            <div class="loader-bar"><div class="loader-fill" id="loaderFill"></div></div>
+            <div class="loader-status"><span id="loaderLabel">Iniciando…</span><span id="loaderPct">0%</span></div>
+        </div>
+    </div>
+
+    <!-- Top HUD -->
+    <header class="hud-top" data-ui>
+        <div class="brand glass">
+            <svg class="brand-mark"><use href="#i-cube"/></svg>
+            <div>
+                <h1 class="brand-title">My Room <em>in 3D</em></h1>
+                <p class="brand-sub">AMC's Workspace</p>
+            </div>
+        </div>
+        <div class="status">
+            <span class="chip glass"><i class="dot"></i>EN VIVO</span>
+            <span class="chip glass chip-clock" id="clock">--:--</span>
+            <span class="chip glass chip-fps" id="fps">-- FPS</span>
+            <button class="chip glass chip-btn chip-help" id="helpBtn" aria-label="Atajos de teclado"><svg class="icon" style="width:15px;height:15px"><use href="#i-keys"/></svg>Atajos</button>
+        </div>
+    </header>
+
+    <!-- Bottom dock -->
+    <nav class="dock glass" aria-label="Controles" data-ui>
+        <div class="dock-group" id="viewButtons"></div>
+        <span class="dock-sep"></span>
+        <div class="dock-group">
+            <button class="dock-btn" id="themeBtn" aria-label="Cambiar a modo día"><svg class="icon"><use href="#i-sun"/></svg><span>Día</span></button>
+            <button class="dock-btn" id="rotateBtn" aria-pressed="false" aria-label="Rotación automática"><svg class="icon"><use href="#i-rotate"/></svg><span>Girar</span></button>
+            <button class="dock-btn" id="objectsBtn" aria-pressed="false" aria-label="Lista de objetos"><svg class="icon"><use href="#i-list"/></svg><span>Objetos</span></button>
+            <button class="dock-btn" id="shotBtn" aria-label="Guardar captura"><svg class="icon"><use href="#i-image"/></svg><span>Captura</span></button>
+            <button class="dock-btn" id="fullBtn" aria-label="Pantalla completa"><svg class="icon"><use href="#i-max"/></svg><span>Completa</span></button>
+            <button class="dock-btn" id="hideBtn" aria-label="Ocultar interfaz"><svg class="icon"><use href="#i-eye-off"/></svg><span>Ocultar</span></button>
+        </div>
+    </nav>
+
+    <!-- Objects panel -->
+    <aside class="objects-panel glass" id="objectsPanel" aria-label="Objetos del cuarto" data-ui>
+        <div class="panel-head">
+            <span class="panel-title">Objetos</span>
+            <button class="icon-btn" id="objectsClose" aria-label="Cerrar"><svg class="icon"><use href="#i-x"/></svg></button>
+        </div>
+        <ul class="object-list" id="objectList"></ul>
+    </aside>
+
+    <!-- Hover tooltip and info card -->
+    <div class="tooltip glass" id="tooltip" data-ui></div>
+    <section class="info-card glass" id="infoCard" aria-live="polite" data-ui>
+        <button class="icon-btn close" id="cardClose" aria-label="Cerrar"><svg class="icon"><use href="#i-x"/></svg></button>
+        <div class="card-kicker" id="cardKicker">Objeto</div>
+        <h2 id="cardTitle"></h2>
+        <p id="cardDesc"></p>
+        <div class="tags" id="cardTags"></div>
+        <div class="card-actions">
+            <button class="btn btn-primary" id="cardBack"><svg class="icon"><use href="#i-back"/></svg>Volver a la vista</button>
+        </div>
+    </section>
+
+    <div class="hint glass" id="hint" data-ui></div>
+    <div class="toast glass" id="toast" role="status" data-ui></div>
+
+    <div class="help" id="help" data-ui>
+        <div class="help-box glass" role="dialog" aria-label="Atajos de teclado">
+            <h2>Atajos de teclado</h2>
+            <div class="keys">
+                <kbd>1 – 7</kbd><span>Cambiar de vista</span>
+                <kbd>T</kbd><span>Modo día / noche</span>
+                <kbd>R</kbd><span>Rotación automática</span>
+                <kbd>O</kbd><span>Lista de objetos</span>
+                <kbd>P</kbd><span>Guardar captura</span>
+                <kbd>F</kbd><span>Pantalla completa</span>
+                <kbd>H</kbd><span>Ocultar / mostrar interfaz</span>
+                <kbd>Esc</kbd><span>Cerrar paneles</span>
+            </div>
+        </div>
+    </div>
+
+    <button class="show-ui glass" id="showUi" aria-label="Mostrar interfaz" data-ui><svg class="icon"><use href="#i-eye"/></svg></button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>

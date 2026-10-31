@@ -182,12 +182,17 @@
         // fn(isNight) runs once at start-up and on every theme toggle
         onTheme(fn) { themeCallbacks.push(fn); fn(ROOM.isNight); },
 
-        buildAll() {
+        // Builds every registered object, yielding to the browser between objects so the
+        // loading screen can show progress. onProgress(done, total, name) is called after each one.
+        async buildAll(onProgress) {
             const only = params.get('only');
             const hide = (params.get('hide') || '').split(',').filter(Boolean);
             const wanted = only ? new Set(only.split(',').concat(['surfaces'])) : null;
-            builders.forEach(({ name, build }) => {
-                if ((wanted && !wanted.has(name)) || hide.includes(name)) return;
+            const todo = builders.filter(({ name }) => !((wanted && !wanted.has(name)) || hide.includes(name)));
+            for (let i = 0; i < todo.length; i++) {
+                const { name, build } = todo[i];
+                if (onProgress) onProgress(i, todo.length, name);
+                await new Promise(r => setTimeout(r, 0));
                 const group = new THREE.Group();
                 group.name = name;
                 groups[name] = group;
@@ -198,7 +203,8 @@
                     errors.push(`${name}: ${e && e.stack || e}`);
                     console.error(`[room] failed to build "${name}"`, e);
                 }
-            });
+            }
+            if (onProgress) onProgress(todo.length, todo.length, null);
             const expected = (ROOM.layout && ROOM.layout.objects) || [];
             expected.forEach(n => {
                 if (!builders.some(b => b.name === n)) errors.push(`${n}: object file did not register (syntax error or missing script?)`);
@@ -265,28 +271,118 @@
     // widen the vertical field of view so the same horizontal extent stays visible.
     const PRESET_ASPECT = 765 / 1024;
     let activeView = null;
+    let tween = null;
+
+    function fovFor(baseFov) {
+        if (camera.aspect >= PRESET_ASPECT) return baseFov;
+        const halfH = Math.atan(Math.tan(THREE.MathUtils.degToRad(baseFov / 2)) * PRESET_ASPECT / camera.aspect);
+        return Math.min(85, THREE.MathUtils.radToDeg(2 * halfH));
+    }
 
     function fitFov() {
         if (!activeView) return;
-        const base = activeView.fov || 58;
-        if (camera.aspect >= PRESET_ASPECT) {
-            camera.fov = base;
-        } else {
-            const halfH = Math.atan(Math.tan(THREE.MathUtils.degToRad(base / 2)) * PRESET_ASPECT / camera.aspect);
-            camera.fov = Math.min(85, THREE.MathUtils.radToDeg(2 * halfH));
-        }
+        camera.fov = fovFor(activeView.fov || 58);
         camera.updateProjectionMatrix();
     }
 
     ROOM.setView = function (name) {
         const v = (ROOM.layout.views || {})[name];
         if (!v) return false;
+        tween = null;
         activeView = v;
         fitFov();
         camera.position.set(...v.position);
         controls.target.set(...v.target);
         controls.update();
         return true;
+    };
+
+    // Smooth camera move; resolves when it arrives (or immediately if cancelled by the user).
+    ROOM.flyTo = function (position, target, { duration = 1.4, fov = null, lift = 0.25 } = {}) {
+        if (tween && tween.done) tween.done(false);
+        return new Promise(resolve => {
+            tween = {
+                p0: camera.position.clone(), t0: controls.target.clone(),
+                p1: new THREE.Vector3(...position), t1: new THREE.Vector3(...target),
+                f0: camera.fov, f1: fov === null ? camera.fov : fov,
+                start: performance.now(), dur: Math.max(1, duration * 1000), lift, done: resolve
+            };
+        });
+    };
+
+    ROOM.goToView = function (name, opts = {}) {
+        const v = (ROOM.layout.views || {})[name];
+        if (!v) return Promise.resolve(false);
+        activeView = v;
+        return ROOM.flyTo(v.position, v.target, Object.assign({ fov: fovFor(v.fov || 58) }, opts));
+    };
+
+    function stepTween(now) {
+        if (!tween) return;
+        const k = Math.min(1, (now - tween.start) / tween.dur);
+        const e = k < 0.5 ? 4 * k * k * k : 1 - Math.pow(-2 * k + 2, 3) / 2;
+        camera.position.lerpVectors(tween.p0, tween.p1, e);
+        camera.position.y += Math.sin(Math.PI * e) * tween.lift;
+        controls.target.lerpVectors(tween.t0, tween.t1, e);
+        camera.fov = tween.f0 + (tween.f1 - tween.f0) * e;
+        camera.updateProjectionMatrix();
+        if (k >= 1) {
+            const done = tween.done;
+            tween = null;
+            done(true);
+        }
+    }
+
+    // The user grabbing the controls cancels any camera flight
+    controls.addEventListener('start', () => {
+        if (tween) { const done = tween.done; tween = null; done(false); }
+    });
+
+    ROOM.setAutoRotate = function (on) {
+        controls.autoRotate = on;
+        controls.autoRotateSpeed = 0.7;
+    };
+
+    // Which object (top-level group name) is under a screen point, or null
+    const raycaster = new THREE.Raycaster();
+    const ndc = new THREE.Vector2();
+    ROOM.pick = function (clientX, clientY) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        ndc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+        raycaster.setFromCamera(ndc, camera);
+        const hits = raycaster.intersectObjects(Object.values(groups), true);
+        for (const h of hits) {
+            const m = h.object.material;
+            if (!h.object.visible || (m && m.depthWrite === false)) continue;   // skip decals / glows
+            let o = h.object;
+            while (o && o.parent && o.parent !== room) o = o.parent;
+            if (!o || !o.name) continue;
+            return o.name === 'surfaces' ? null : { name: o.name, point: h.point };
+        }
+        return null;
+    };
+
+    // Fly to a framing of one object, approaching from the side the camera is already on
+    ROOM.focusObject = function (name, opts = {}) {
+        const g = groups[name];
+        if (!g) return Promise.resolve(false);
+        const bb = new THREE.Box3().setFromObject(g);
+        const c = bb.getCenter(new THREE.Vector3());
+        const r = Math.max(0.25, bb.getSize(new THREE.Vector3()).length() / 2);
+        const dir = new THREE.Vector3().subVectors(camera.position, c);
+        dir.y = 0;
+        if (dir.lengthSq() < 1e-6) dir.set(1, 0, 1);
+        dir.normalize();
+        dir.y = 0.55;
+        dir.normalize();
+        const fov = fovFor(50);
+        const dist = (r * 1.35) / Math.sin(THREE.MathUtils.degToRad(Math.min(fov, 50) / 2));
+        const R = ROOM.layout.room;
+        const p = c.clone().addScaledVector(dir, dist);
+        p.x = THREE.MathUtils.clamp(p.x, R.minX + 0.25, 3.2);
+        p.z = THREE.MathUtils.clamp(p.z, R.minZ + 0.25, 3.2);
+        p.y = THREE.MathUtils.clamp(p.y, 0.35, 2.8);
+        return ROOM.flyTo(p.toArray(), c.toArray(), Object.assign({ fov }, opts));
     };
 
     // Frame one object's bounding box from a given direction (used by the screenshot tool)
@@ -306,14 +402,14 @@
 
     // ---------- start ----------
 
-    ROOM.start = function () {
-        ROOM.buildAll();
+    ROOM.start = async function (onProgress) {
+        await ROOM.buildAll(onProgress);
         applyTheme();
         ROOM.setView(params.get('view') || 'photo');
 
         const clock = new THREE.Clock();
         let time = 0;
-        function animate() {
+        function animate(now) {
             requestAnimationFrame(animate);
             const dt = Math.min(clock.getDelta(), 0.1);
             time += dt;
@@ -322,10 +418,11 @@
                     if (errors.length < 50) errors.push(`frame: ${e}`);
                 }
             }
+            stepTween(now || performance.now());
             controls.update();
             renderer.render(scene, camera);
         }
-        animate();
+        requestAnimationFrame(animate);
         ROOM.ready = true;
     };
 
